@@ -1823,7 +1823,7 @@ class Component extends DCLogic {
     window.addEventListener('dragleave', this._dragleave);
     window.addEventListener('dragend', this._dragend);
     window.addEventListener('drop', this._drop);
-    if (window.pdfjsLib) { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {} }
+    // workerSrc set lazily in parsePDF() to avoid race with helmet script loading
   }
   componentWillUnmount() {
     document.removeEventListener('paste', this._paste);
@@ -1939,9 +1939,12 @@ class Component extends DCLogic {
     const cat = f.categoryTouched ? f.category : this.suggestCategory(text);
     const title = f.title || (fname ? fname.replace(/\.[^.]+$/, '') : (tag || 'รายการใหม่'));
     const content = f.content ? (f.content + '\n\n' + text) : text;
+    const msg = text.trim()
+      ? 'ดึงข้อความสำเร็จ · ระบบเสนอ tag “' + (tag || '—') + '” และหมวด “' + this.catLabel(cat) + '” (แก้ได้)'
+      : '';  // empty: message already set by parsePDF image-fallback
     this.setState({
       form: { ...f, tag, title, content: content.slice(0, 20000), category: cat, source },
-      processing: 'ดึงข้อความสำเร็จ · ระบบเสนอ tag “' + (tag || '—') + '” และหมวด “' + this.catLabel(cat) + '” (แก้ได้)',
+      ...(msg ? { processing: msg } : {}),
     });
   }
 
@@ -1959,6 +1962,8 @@ class Component extends DCLogic {
   }
   async parsePDF(file) {
     if (!window.pdfjsLib) throw new Error('PDF reader ยังโหลดไม่เสร็จ');
+    // Set workerSrc here so pdf.js is guaranteed loaded before we call getDocument
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const buf = await this.readArrayBuffer(file);
     const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
     let out = '';
@@ -1968,7 +1973,26 @@ class Component extends DCLogic {
       const c = await page.getTextContent();
       out += c.items.map(x => x.str).join(' ') + '\n';
     }
-    return out.trim();
+    const text = out.trim();
+    // Image-based PDF (DCS screenshot, scanned doc): render page 1 as canvas for OCR
+    if (!text && pdf.numPages > 0) {
+      try {
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        const imgUrl = canvas.toDataURL('image/png');
+        this.setState({
+          form: { ...this.state.form, image: imgUrl, source: 'IMG' },
+          processing: '📄 PDF ไม่มีข้อความ (อาจเป็นไฟล์ภาพ) — แสดงหน้าแรกเป็นภาพแล้ว กด "อ่านข้อความจากภาพ (OCR)" เพื่อดึงข้อความ',
+        });
+      } catch (e) {
+        this.setState({ processing: '⚠️ PDF ไม่มีข้อความ — ลองพิมพ์เนื้อหาเองหรือ Ctrl+V วางภาพแคปหน้าจอแทน' });
+      }
+    }
+    return text;
   }
 
   loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
