@@ -1,0 +1,2149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+// GENERATED from dc-runtime/src/*.ts — do not edit. Rebuild with `cd dc-runtime && bun run build`.
+"use strict";
+(() => {
+  var __defProp = Object.defineProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+
+  // src/react.ts
+  function getReact() {
+    const R = window.React;
+    if (!R) throw new Error("dc-runtime: window.React is not available yet");
+    return R;
+  }
+  function getReactDOM() {
+    const RD = window.ReactDOM;
+    if (!RD) throw new Error("dc-runtime: window.ReactDOM is not available yet");
+    return RD;
+  }
+  var h = ((...args) => getReact().createElement(
+    ...args
+  ));
+
+  // src/parse.ts
+  function parseDcDocument(doc) {
+    const dc = doc.querySelector("x-dc");
+    if (!dc) return null;
+    const scriptEl = doc.querySelector("script[data-dc-script]");
+    const { props, preview } = parseDataProps(
+      scriptEl?.getAttribute("data-props") ?? null
+    );
+    return {
+      template: dc.innerHTML,
+      js: scriptEl ? scriptEl.textContent || "" : "",
+      props,
+      preview
+    };
+  }
+  function parseDcText(src) {
+    const openMatch = /<x-dc(?:\s[^>]*)?>/.exec(src);
+    if (!openMatch) return null;
+    const close = src.lastIndexOf("</x-dc>");
+    if (close === -1 || close < openMatch.index) return null;
+    const template = src.slice(openMatch.index + openMatch[0].length, close);
+    const doc = new DOMParser().parseFromString(src, "text/html");
+    const scriptEl = doc.querySelector("script[data-dc-script]");
+    const { props, preview } = parseDataProps(
+      scriptEl?.getAttribute("data-props") ?? null
+    );
+    return {
+      template,
+      js: scriptEl ? scriptEl.textContent || "" : "",
+      props,
+      preview
+    };
+  }
+  function parseDataProps(raw) {
+    if (!raw) return { props: null, preview: null };
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { props: null, preview: null };
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { props: null, preview: null };
+    }
+    const obj = parsed;
+    const preview = obj.$preview && typeof obj.$preview === "object" ? obj.$preview : null;
+    const rest = {};
+    for (const k of Object.keys(obj)) {
+      if (k[0] !== "$") rest[k] = obj[k];
+    }
+    return { props: Object.keys(rest).length ? rest : null, preview };
+  }
+  function dcNameFromPath(pathname) {
+    let p = pathname || "";
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+    }
+    const base = p.split("/").pop() || "Root";
+    return base.replace(/\.dc\.html$/, "").replace(/\.html?$/, "") || "Root";
+  }
+
+  // src/boot.ts
+  var BASE_CSS = `
+    .sc-placeholder{background:rgba(255,255,255,.3);border:1px solid rgba(0,0,0,.5);
+      border-radius:2px;box-sizing:border-box;overflow:hidden}
+    @keyframes sc-shine{0%{background-position:100% 50%}100%{background-position:0% 50%}}
+    @keyframes sc-veil-pulse{0%,100%{opacity:.4}50%{opacity:1}}
+    html.sc-dc-streaming .sc-placeholder,
+    html.sc-dc-streaming .sc-interp.sc-missing{position:relative;
+      background:color-mix(in srgb,currentColor 5%,transparent);
+      border-color:transparent}
+    html.sc-dc-streaming .sc-placeholder::before,
+    html.sc-dc-streaming .sc-interp.sc-missing::before{content:'';
+      position:absolute;inset:0;pointer-events:none;
+      background:linear-gradient(90deg,rgba(217,119,87,0) 25%,rgba(247,225,211,.95) 37%,rgba(217,119,87,0) 63%);
+      background-size:400% 100%;animation:sc-shine .73s ease infinite}
+    html.sc-dc-streaming::after{content:'';position:fixed;inset:0;
+      z-index:2147483646;pointer-events:none;
+      box-shadow:inset 0 0 90px rgba(217,119,87,.16),inset 0 0 22px rgba(217,119,87,.1);
+      animation:sc-veil-pulse 1.36s ease-in-out infinite}
+    .sc-placeholder-error{padding:4px 8px;font:11px/1.4 ui-monospace,monospace;
+      color:rgba(0,0,0,.7);word-break:break-word}
+    .sc-interp.sc-missing{display:inline-block;width:2em;height:1em;overflow:hidden;
+      vertical-align:text-bottom;background:rgba(255,255,255,.3);border:1px solid rgba(0,0,0,.5);
+      border-radius:2px;box-sizing:border-box;color:transparent;
+      user-select:none}
+    .sc-interp.sc-unresolved{font-family:ui-monospace,monospace;font-size:.85em;
+      color:rgba(0,0,0,.5);background:rgba(0,0,0,.05);border-radius:3px;
+      padding:0 3px}
+    .sc-host.sc-has-error{position:relative}
+    .sc-logic-error{position:absolute;top:8px;left:8px;z-index:2147483647;max-width:60ch;
+      padding:6px 10px;background:#b00020;color:#fff;font:12px/1.4 ui-monospace,monospace;
+      border-radius:4px;white-space:pre-wrap;pointer-events:none}
+    /* Mirrors PRINT_BASELINE_CSS in apps/web deck-stage-export.ts \u2014 keep both
+       in sync until dc-runtime regains a build step. */
+    @media print {
+      @page { margin: 0.5cm; }
+      html, body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      section, article, figure, table { break-inside: avoid; }
+      *, *::before, *::after {
+        animation-delay: -99s !important; animation-duration: .001s !important;
+        animation-iteration-count: 1 !important; animation-fill-mode: both !important;
+        animation-play-state: running !important; transition-duration: 0s !important;
+      }
+    }
+  `;
+  var FULL_PAGE_CSS = "html,body{height:100%;margin:0}#dc-root,#dc-root>.sc-host{height:100%}";
+  function rootNameForDocument(doc, loc) {
+    let bootPath = loc.pathname || "";
+    if (!/\.dc\.html?$/i.test(safeDecode(bootPath))) {
+      try {
+        bootPath = new URL(doc.baseURI || "/").pathname;
+      } catch {
+      }
+    }
+    return dcNameFromPath(bootPath);
+  }
+  function safeDecode(s) {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  }
+  function boot(runtime, doc = document) {
+    const parsed = parseDcDocument(doc);
+    if (!parsed) return null;
+    const React = getReact();
+    const rootName = rootNameForDocument(doc, location);
+    runtime.markFetched(rootName);
+    runtime.adoptParsed(rootName, parsed);
+    fetch(location.href).then((res) => res.ok ? res.text() : "").then((t) => {
+      const raw = t ? parseDcText(t) : null;
+      if (raw?.template) runtime.updateHtml(rootName, raw.template);
+    }).catch(() => {
+    });
+    const dc = doc.querySelector("x-dc");
+    const hostEl = doc.createElement("div");
+    hostEl.id = "dc-root";
+    dc.replaceWith(hostEl);
+    if (!parsed.preview) {
+      const s = doc.createElement("style");
+      s.textContent = FULL_PAGE_CSS;
+      doc.head.appendChild(s);
+    }
+    const Root = runtime.getDC(rootName);
+    const entry = runtime.registry.get(rootName);
+    function StandaloneRoot() {
+      const [, setTick] = React.useState(0);
+      React.useEffect(() => {
+        const sub = () => setTick((n) => n + 1);
+        entry.subs.add(sub);
+        return () => {
+          entry.subs.delete(sub);
+        };
+      }, []);
+      return h(Root, entry.propOverrides || null);
+    }
+    const ReactDOM = getReactDOM();
+    if (ReactDOM.createRoot)
+      ReactDOM.createRoot(hostEl).render(h(StandaloneRoot));
+    else ReactDOM.render(h(StandaloneRoot), hostEl);
+    return rootName;
+  }
+
+  // src/expr.ts
+  var IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*/;
+  var NUMBER_RE = /^-?\d+(\.\d+)?$/;
+  function resolve(vals, src) {
+    const expr = String(src).trim();
+    if (!expr) return void 0;
+    if (expr[0] === "(" && expr[expr.length - 1] === ")" && parensWrapWhole(expr)) {
+      return resolve(vals, expr.slice(1, -1));
+    }
+    const eq = findTopLevelEquality(expr);
+    if (eq) {
+      const lv = resolve(vals, expr.slice(0, eq.index));
+      const rv = resolve(vals, expr.slice(eq.index + eq.op.length));
+      switch (eq.op) {
+        case "===":
+          return lv === rv;
+        case "!==":
+          return lv !== rv;
+        case "==":
+          return lv == rv;
+        default:
+          return lv != rv;
+      }
+    }
+    if (expr[0] === "!") return !resolve(vals, expr.slice(1));
+    if (expr === "true") return true;
+    if (expr === "false") return false;
+    if (expr === "null") return null;
+    if (expr === "undefined") return void 0;
+    if (NUMBER_RE.test(expr)) return Number(expr);
+    if (expr.length >= 2 && (expr[0] === '"' || expr[0] === "'") && expr[expr.length - 1] === expr[0]) {
+      return expr.slice(1, -1);
+    }
+    return resolvePath(vals, expr);
+  }
+  function parensWrapWhole(expr) {
+    let depth = 0;
+    for (let i = 0; i < expr.length - 1; i++) {
+      if (expr[i] === "(") depth++;
+      else if (expr[i] === ")") {
+        depth--;
+        if (depth === 0) return false;
+      }
+    }
+    return true;
+  }
+  function findTopLevelEquality(expr) {
+    let depth = 0;
+    for (let i = 0; i < expr.length; i++) {
+      const c = expr[i];
+      if (c === "[" || c === "(") depth++;
+      else if (c === "]" || c === ")") depth--;
+      else if (depth === 0 && (c === "=" || c === "!") && expr[i + 1] === "=") {
+        if (i > 0 && (expr[i - 1] === "=" || expr[i - 1] === "!")) continue;
+        if (!expr.slice(0, i).trim()) continue;
+        const op = expr[i + 2] === "=" ? c + "==" : c + "=";
+        return { index: i, op };
+      }
+    }
+    return null;
+  }
+  function resolvePath(vals, expr) {
+    const head = expr.match(IDENT_RE);
+    if (!head) return void 0;
+    let cur = vals == null ? void 0 : vals[head[0]];
+    let i = head[0].length;
+    while (i < expr.length) {
+      if (expr[i] === ".") {
+        const m = expr.slice(i + 1).match(IDENT_RE) || expr.slice(i + 1).match(/^\d+/);
+        if (!m) return void 0;
+        cur = cur == null ? void 0 : cur[m[0]];
+        i += 1 + m[0].length;
+      } else if (expr[i] === "[") {
+        let depth = 1;
+        let j = i + 1;
+        while (j < expr.length && depth > 0) {
+          if (expr[j] === "[") depth++;
+          else if (expr[j] === "]") {
+            depth--;
+            if (depth === 0) break;
+          }
+          j++;
+        }
+        if (depth !== 0) return void 0;
+        const key = resolve(vals, expr.slice(i + 1, j));
+        cur = cur == null ? void 0 : cur[key];
+        i = j + 1;
+      } else {
+        return void 0;
+      }
+    }
+    return cur;
+  }
+
+  // src/encode.ts
+  var CAMEL_ATTR = "sc-camel-";
+  var RAW_WRAP = {
+    select: "sc-raw-select",
+    table: "sc-raw-table",
+    tbody: "sc-raw-tbody",
+    thead: "sc-raw-thead",
+    tfoot: "sc-raw-tfoot",
+    tr: "sc-raw-tr",
+    td: "sc-raw-td",
+    th: "sc-raw-th",
+    caption: "sc-raw-caption"
+  };
+  var RAW_UNWRAP = Object.fromEntries(
+    Object.entries(RAW_WRAP).map(([k, v]) => [v, k])
+  );
+  var EVENT_MAP = {
+    onclick: "onClick",
+    onchange: "onChange",
+    oninput: "onInput",
+    onsubmit: "onSubmit",
+    onkeydown: "onKeyDown",
+    onkeyup: "onKeyUp",
+    onkeypress: "onKeyPress",
+    onmousedown: "onMouseDown",
+    onmouseup: "onMouseUp",
+    onmouseenter: "onMouseEnter",
+    onmouseleave: "onMouseLeave",
+    onfocus: "onFocus",
+    onblur: "onBlur",
+    ondoubleclick: "onDoubleClick",
+    oncontextmenu: "onContextMenu"
+  };
+  var ATTRS = `(?:[^>"']|"[^"]*"|'[^']*')*`;
+  var IMPORT_SELF_CLOSE_RE = new RegExp(
+    "<(x-import|dc-import)(" + ATTRS + ")/>",
+    "gi"
+  );
+  var CAMEL_ATTR_RE = /(\s)([a-z]+[A-Z][A-Za-z0-9]*)(\s*=)/g;
+  function encodeCase(html) {
+    html = html.replace(
+      IMPORT_SELF_CLOSE_RE,
+      (_, t, a) => "<" + t + a + "></" + t + ">"
+    );
+    html = html.replace(/<helmet(\s|>)/gi, "<sc-helmet$1");
+    html = html.replace(/<\/helmet\s*>/gi, "</sc-helmet>");
+    html = html.replace(
+      CAMEL_ATTR_RE,
+      (_, sp, name, eq) => sp + CAMEL_ATTR + name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()) + eq
+    );
+    for (const [real, alias] of Object.entries(RAW_WRAP)) {
+      html = html.replace(
+        new RegExp("(</?)" + real + "(?=[\\s>])", "gi"),
+        "$1" + alias
+      );
+    }
+    return html;
+  }
+  function kebabToCamel(s) {
+    return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  }
+  function cssToObj(css) {
+    const o = {};
+    for (const decl of css.split(";")) {
+      const i = decl.indexOf(":");
+      if (i < 0) continue;
+      const prop = decl.slice(0, i).trim();
+      o[prop.startsWith("--") ? prop : kebabToCamel(prop)] = decl.slice(i + 1).trim();
+    }
+    return o;
+  }
+  function compileAttr(raw) {
+    const whole = raw.match(/^\s*\{\{([\s\S]+?)\}\}\s*$/);
+    if (whole) {
+      const path = whole[1];
+      return (vals) => resolve(vals, path);
+    }
+    if (raw.includes("{{")) {
+      const parts = raw.split(/\{\{([\s\S]+?)\}\}/g);
+      return (vals) => parts.map((s, i) => i & 1 ? resolve(vals, s) ?? "" : s).join("");
+    }
+    return () => raw;
+  }
+
+  // src/compile.ts
+  function collectProps(node, isComponent, host) {
+    const propGetters = [];
+    const pseudoClasses = [];
+    let hintSize = null;
+    for (const { name, value } of [...node.attributes]) {
+      if (name === "sc-name" || name === "data-dc-tpl") continue;
+      let key = name;
+      if (key.startsWith(CAMEL_ATTR))
+        key = kebabToCamel(key.slice(CAMEL_ATTR.length));
+      if (key === "hint-size") {
+        hintSize = value;
+        continue;
+      }
+      if (key.startsWith("style-")) {
+        pseudoClasses.push(host.pseudoClass(key.slice(6), value));
+        continue;
+      }
+      if (isComponent) {
+        if (key.includes("-")) key = kebabToCamel(key);
+      } else {
+        if (key === "class") key = "className";
+        else if (key === "for") key = "htmlFor";
+        else if (key.startsWith("on"))
+          key = EVENT_MAP[key] || "on" + key[2].toUpperCase() + key.slice(3);
+      }
+      propGetters.push([key, compileAttr(value)]);
+    }
+    return { propGetters, pseudoClasses, hintSize };
+  }
+  var HOST_STYLE_PROPS = /* @__PURE__ */ new Set([
+    "position",
+    "left",
+    "right",
+    "top",
+    "bottom",
+    "inset",
+    "width",
+    "height",
+    "z-index",
+    "transform"
+  ]);
+  function hostPositionStyle(style) {
+    const all = typeof style === "string" ? cssToObj(style) : style != null && typeof style === "object" ? style : null;
+    if (!all) return void 0;
+    const out = {};
+    for (const [k, v] of Object.entries(all)) {
+      const kebab = k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+      if (HOST_STYLE_PROPS.has(kebab)) out[k] = v;
+    }
+    return Object.keys(out).length ? out : void 0;
+  }
+  function compileTemplate(html, host) {
+    const tpl = document.createElement("template");
+    //! nosemgrep: direct-inner-html-assignment
+    tpl.innerHTML = encodeCase(html);
+    let tplN = 0;
+    (function stamp(node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        node.setAttribute("data-dc-tpl", String(tplN++));
+      }
+      for (const c of node.childNodes) stamp(c);
+    })(tpl.content);
+    const builders = walkChildren(tpl.content, host);
+    const render = ((vals, ctx) => builders.map((b, i) => b(vals || {}, ctx, i)));
+    render.__annotated = tpl.innerHTML;
+    return render;
+  }
+  function walkChildren(node, host) {
+    return [...node.childNodes].map((c) => walk(c, host)).filter((b) => b != null);
+  }
+  function walk(node, host) {
+    if (node.nodeType === Node.TEXT_NODE) return walkText(node);
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+    const el = node;
+    const tag = el.tagName.toLowerCase();
+    if (tag === "sc-for") return walkFor(el, host);
+    if (tag === "sc-if") return walkIf(el, host);
+    if (tag === "x-import") return walkXImport(el, host);
+    if (tag === "sc-helmet") return host.helmet(el);
+    if (tag === "dc-import") return walkComponent(el, host);
+    return walkElement(el, host);
+  }
+  var warnedHoles = /* @__PURE__ */ new Set();
+  function warnUnresolved(ctx, what) {
+    const key = (ctx?.__name || "?") + "\0" + what;
+    if (warnedHoles.has(key)) return;
+    warnedHoles.add(key);
+    console.warn("[dc-runtime] " + (ctx?.__name || "template") + ": " + what);
+  }
+  function walkText(node) {
+    const txt = node.nodeValue ?? "";
+    if (!txt.includes("{{")) {
+      if (!txt.trim() && !txt.includes(" ")) return null;
+      return () => txt;
+    }
+    const parts = txt.split(/\{\{([\s\S]+?)\}\}/g);
+    return (vals, ctx, key) => h(
+      getReact().Fragment,
+      { key },
+      ...parts.map((p, i) => {
+        if (!(i & 1)) return p;
+        const v = resolve(vals, p);
+        if (v === void 0) {
+          if (!ctx?.__streamingNow) {
+            if (document.body?.hasAttribute("data-dc-editor-on")) {
+              return h(
+                "span",
+                { key: i, className: "sc-interp sc-unresolved" },
+                "{{ " + p.trim() + " }}"
+              );
+            }
+            warnUnresolved(
+              ctx,
+              "{{ " + p.trim() + " }} never resolved \u2014 rendered as empty"
+            );
+            return null;
+          }
+          return h(
+            "span",
+            { key: i, className: "sc-interp sc-missing" },
+            p.trim()
+          );
+        }
+        if (getReact().isValidElement(v) || Array.isArray(v)) {
+          return h(getReact().Fragment, { key: i }, v);
+        }
+        if (v === null || typeof v === "boolean") return null;
+        return h("span", { key: i, className: "sc-interp" }, String(v));
+      })
+    );
+  }
+  function walkFor(el, host) {
+    const listGet = compileAttr(el.getAttribute("list") || "");
+    const asName = el.getAttribute("as") || "item";
+    const hintN = parseInt(el.getAttribute("hint-placeholder-count") || "0", 10);
+    const kids = walkChildren(el, host);
+    const listSrc = el.getAttribute("list") || "";
+    return (vals, ctx, key) => {
+      let list = listGet(vals);
+      if (!Array.isArray(list)) {
+        if (!ctx?.__streamingNow) {
+          if (list !== void 0 && list !== null) {
+            warnUnresolved(
+              ctx,
+              'sc-for list="' + listSrc + '" is not an array (' + typeof list + ")"
+            );
+          }
+          list = [];
+        } else {
+          list = hintN > 0 ? Array(hintN).fill(void 0) : [];
+        }
+      }
+      return h(
+        getReact().Fragment,
+        { key },
+        list.map((item, i) => {
+          const sub = { ...vals, [asName]: item, $index: i };
+          return h(
+            getReact().Fragment,
+            { key: i },
+            kids.map((b, j) => b(sub, ctx, j))
+          );
+        })
+      );
+    };
+  }
+  function walkIf(el, host) {
+    const valGet = compileAttr(el.getAttribute("value") || "");
+    const hintRaw = el.getAttribute("hint-placeholder-val");
+    const hintGet = hintRaw != null ? compileAttr(hintRaw) : null;
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      let v = valGet(vals);
+      if (v === void 0 && hintGet && ctx?.__streamingNow) v = hintGet(vals);
+      return v ? h(
+        getReact().Fragment,
+        { key },
+        kids.map((b, j) => b(vals, ctx, j))
+      ) : null;
+    };
+  }
+  function walkComponent(el, host) {
+    const name = el.getAttribute("name") || el.getAttribute("component") || "";
+    el.removeAttribute("name");
+    el.removeAttribute("component");
+    const tplId = el.getAttribute("data-dc-tpl");
+    const styleRaw = el.getAttribute("style");
+    el.removeAttribute("style");
+    const styleGet = styleRaw != null ? compileAttr(styleRaw) : null;
+    const { propGetters, hintSize } = collectProps(el, true, host);
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      const props = {
+        key,
+        __hintSize: hintSize,
+        __tplId: tplId,
+        __hostStyle: styleGet ? hostPositionStyle(styleGet(vals)) : void 0
+      };
+      for (const [k, g] of propGetters) props[k] = g(vals);
+      if (kids.length) props.children = kids.map((b, j) => b(vals, ctx, j));
+      return h(host.component(name), props);
+    };
+  }
+  function walkXImport(el, host) {
+    const globalNameGet = compileAttr(
+      el.getAttribute("component-from-global-scope") || ""
+    );
+    const exportNameGet = compileAttr(
+      el.getAttribute("component") || el.getAttribute("name") || ""
+    );
+    const url = el.getAttribute("from") || el.getAttribute("src") || el.getAttribute("import") || "";
+    const kind = /\.(jsx|tsx)(\?|#|$)/i.test(url) ? "jsx" : "js";
+    const tplId = el.getAttribute("data-dc-tpl");
+    const styleRaw = el.getAttribute("style");
+    el.removeAttribute("style");
+    const styleGet = styleRaw != null ? compileAttr(styleRaw) : null;
+    const wrap = tplId != null || styleGet != null;
+    const { propGetters, hintSize } = collectProps(el, true, host);
+    const hasContent = el.children.length > 0 || !!(el.textContent || "").trim();
+    const kids = hasContent ? walkChildren(el, host) : [];
+    const urlBindable = url.includes("{{");
+    if (url && !urlBindable) host.loadExternal(kind, url);
+    const evalName = (g, vals) => {
+      const v = g(vals);
+      const s = v == null ? "" : String(v);
+      return s.includes("{{") ? "" : s;
+    };
+    return (vals, ctx, key) => {
+      const globalName = evalName(globalNameGet, vals);
+      const name = globalName || evalName(exportNameGet, vals);
+      const C = !name || urlBindable ? null : globalName ? host.resolveExternalGlobal(url, globalName) : host.resolveExternal(url, name);
+      const hostStyle = styleGet ? hostPositionStyle(styleGet(vals)) : void 0;
+      const wrapper = wrap ? {
+        key,
+        className: "sc-host-x",
+        "data-dc-tpl": tplId,
+        style: hostStyle || { display: "contents" }
+      } : null;
+      if (!C) {
+        const error = urlBindable ? "x-import `from` cannot contain {{ \u2026 }} \u2014 module URLs are resolved at parse time; use a literal URL" : host.resolveExternalError(url, name);
+        const ph = host.placeholder({
+          key: wrapper ? void 0 : key,
+          name,
+          hintSize,
+          error
+        });
+        return wrapper ? h("div", wrapper, ph) : ph;
+      }
+      const props = wrapper ? {} : { key };
+      for (const [k, g] of propGetters) {
+        if (k === "component" || k === "componentFromGlobalScope" || k === "name" || k === "from" || k === "src" || k === "import") {
+          continue;
+        }
+        props[k] = g(vals);
+      }
+      if (kids.length) props.children = kids.map((b, j) => b(vals, ctx, j));
+      return wrapper ? h("div", wrapper, h(C, props)) : h(C, props);
+    };
+  }
+  function walkElement(el, host) {
+    const realTag = RAW_UNWRAP[el.localName] || el.localName;
+    const tplId = el.getAttribute("data-dc-tpl");
+    const { propGetters, pseudoClasses } = collectProps(el, false, host);
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      const props = { key, "data-dc-tpl": tplId };
+      for (const [k, g] of propGetters) {
+        let v = g(vals);
+        if (k === "style" && typeof v === "string") v = cssToObj(v);
+        if ((k === "value" || k === "checked") && v === void 0) {
+          v = k === "checked" ? false : "";
+        }
+        props[k] = v;
+      }
+      if (pseudoClasses.length) {
+        props.className = [props.className, ...pseudoClasses].filter(Boolean).join(" ");
+      }
+      return h(realTag, props, ...kids.map((b, j) => b(vals, ctx, j)));
+    };
+  }
+
+  // src/logic.ts
+  var StreamableLogic = class {
+    constructor(props) {
+      __publicField(this, "props");
+      __publicField(this, "state", {});
+      /** Back-pointer to the wrapper component, installed after construction. */
+      __publicField(this, "__host");
+      this.props = props || {};
+    }
+    setState(update, cb) {
+      this.__host && this.__host.__setLogicState(update, cb);
+    }
+    forceUpdate() {
+      this.__host && this.__host.forceUpdate();
+    }
+    componentDidMount() {
+    }
+    componentDidUpdate(_prevProps) {
+    }
+    componentWillUnmount() {
+    }
+    /** The flat object the template renders against (merged over props). */
+    renderVals() {
+      return {};
+    }
+  };
+  function evalDcLogic(src) {
+    //! nosemgrep: eval-and-function-constructor
+    const fn = new Function(
+      "DCLogic",
+      "StreamableLogic",
+      "React",
+      src + '\n;return (typeof Component!=="undefined"&&Component)||undefined;'
+    );
+    return fn(StreamableLogic, StreamableLogic, getReact());
+  }
+
+  // src/component.ts
+  function Placeholder({
+    name,
+    hintSize,
+    streaming,
+    error
+  }) {
+    const [w, hgt] = (hintSize || "100%,60px").split(",");
+    return h(
+      "div",
+      {
+        className: "sc-placeholder" + (streaming ? " sc-streaming" : ""),
+        style: { width: w.trim(), height: hgt && hgt.trim() },
+        title: name
+      },
+      error ? h(
+        "div",
+        { className: "sc-placeholder-error" },
+        (name ? name + ": " : "") + error
+      ) : null
+    );
+  }
+  function hintToMin(hint) {
+    if (!hint) return void 0;
+    const [w, hgt] = hint.split(",");
+    return { minWidth: w.trim(), minHeight: hgt && hgt.trim() };
+  }
+  function createComponentFactory(registry, ensureFetched) {
+    const React = getReact();
+    const AncestorContext = React.createContext([]);
+    class StreamableComponent extends React.Component {
+      constructor(props) {
+        super(props);
+        __publicField(this, "__name");
+        __publicField(this, "__sub");
+        __publicField(this, "__needsDidMount", false);
+        /** Snapshot of the registry's streaming flags taken at render time —
+         *  builders read it off the RenderCtx (this) to pick placeholder vs
+         *  render-nothing for unresolved values. */
+        __publicField(this, "__streamingNow", false);
+        __publicField(this, "logic");
+        this.__name = props.__name;
+        this.state = { __v: 0, __err: null };
+        this.__sub = () => {
+          this.__reconcileLogic();
+          if (this.state.__err) this.setState({ __err: null });
+          this.forceUpdate();
+        };
+        this.__makeLogic(registry.get(this.__name).Logic, null);
+        ensureFetched(this.__name);
+      }
+      /** Error-boundary hook: a render crash anywhere in this DC's subtree
+       *  (its own template, an x-import'd component, a child DC without its
+       *  own deeper boundary) lands here instead of unmounting the page. */
+      static getDerivedStateFromError(e) {
+        return { __err: e instanceof Error && e.message ? e.message : String(e) };
+      }
+      componentDidCatch(e, info) {
+        console.error(
+          "[dc-runtime] render error in <" + this.__name + ">:",
+          e,
+          info?.componentStack || ""
+        );
+      }
+      /** Instantiate the logic class (or the no-op base) and adopt `prevState`
+       *  over its initial state — used both at mount and on hot-swap. */
+      __makeLogic(Logic, prevState) {
+        const L = Logic || StreamableLogic;
+        try {
+          this.logic = new L(this.__userProps());
+        } catch (e) {
+          console.error(e);
+          registry.get(this.__name).logicError = this.__name + ": " + (e instanceof Error && e.message ? e.message : String(e));
+          this.logic = new StreamableLogic(
+            this.__userProps()
+          );
+        }
+        this.logic.__host = this;
+        if (prevState)
+          this.logic.state = { ...this.logic.state || {}, ...prevState };
+      }
+      /** The props the author's logic + template see — internal __-prefixed
+       *  wiring stripped. */
+      __userProps() {
+        const { __name, __hintSize, __tplId, __hostStyle, ...rest } = this.props;
+        return rest;
+      }
+      __setLogicState(update, cb) {
+        const prev = this.logic.state;
+        const patch = typeof update === "function" ? update(prev) : update;
+        this.logic.state = { ...prev, ...patch };
+        this.setState((s) => ({ __v: s.__v + 1 }), cb);
+      }
+      /** Swap the logic instance when the registry's Logic class changed
+       *  (streaming completion, hot reload). State carries over; didMount
+       *  re-fires after the swap commits so refs exist. */
+      __reconcileLogic() {
+        const Next = registry.get(this.__name).Logic;
+        const Cur = this.logic.constructor;
+        if (Next === Cur || !Next && Cur === StreamableLogic)
+          return;
+        try {
+          this.logic.componentWillUnmount();
+        } catch (e) {
+          console.error(e);
+        }
+        this.__makeLogic(Next, this.logic.state);
+        this.__needsDidMount = true;
+      }
+      componentDidMount() {
+        registry.get(this.__name).subs.add(this.__sub);
+        try {
+          this.logic.componentDidMount();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      componentDidUpdate(prevProps) {
+        this.logic.props = this.__userProps();
+        if (this.__needsDidMount) {
+          this.__needsDidMount = false;
+          try {
+            this.logic.componentDidMount();
+          } catch (e) {
+            console.error(e);
+          }
+        } else {
+          try {
+            this.logic.componentDidUpdate(prevProps);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+      componentWillUnmount() {
+        registry.get(this.__name).subs.delete(this.__sub);
+        try {
+          this.logic.componentWillUnmount();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      render() {
+        const r = registry.get(this.__name);
+        const cls = "sc-host" + (r.htmlStreaming ? " sc-streaming-html" : "") + (r.jsStreaming ? " sc-streaming-js" : "");
+        const hintStyle = r.htmlStreaming ? hintToMin(this.props.__hintSize) : void 0;
+        const hostStyle = this.props.__hostStyle || hintStyle ? { ...hintStyle || {}, ...this.props.__hostStyle || {} } : void 0;
+        const hostBase = {
+          className: cls,
+          style: hostStyle,
+          "data-sc-name": this.__name,
+          "data-dc-tpl": this.props.__tplId
+        };
+        const chain = Array.isArray(this.context) ? this.context : [];
+        if (chain.includes(this.__name)) {
+          const cycle = [
+            ...chain.slice(chain.indexOf(this.__name)),
+            this.__name
+          ].join(" \u2192 ");
+          return h(
+            "div",
+            { ...hostBase, className: cls + " sc-has-error" },
+            h(Placeholder, {
+              name: this.__name,
+              hintSize: this.props.__hintSize,
+              error: "circular import: " + cycle
+            })
+          );
+        }
+        if (this.state.__err) {
+          return h(
+            "div",
+            { ...hostBase, className: cls + " sc-has-error" },
+            h(
+              "div",
+              { className: "sc-logic-error" },
+              this.__name + ": " + this.state.__err
+            ),
+            h(Placeholder, {
+              name: this.__name,
+              hintSize: this.props.__hintSize,
+              error: this.state.__err
+            })
+          );
+        }
+        if (!r.tpl) {
+          return h(
+            "div",
+            hostBase,
+            h(Placeholder, { name: this.__name, hintSize: this.props.__hintSize })
+          );
+        }
+        const userProps = this.__userProps();
+        this.logic.props = userProps;
+        let vals = userProps;
+        let renderErr = r.logicError;
+        try {
+          vals = { ...userProps, ...this.logic.renderVals() || {} };
+        } catch (e) {
+          console.error(e);
+          renderErr = this.__name + ".renderVals(): " + (e instanceof Error && e.message ? e.message : String(e));
+        }
+        this.__streamingNow = !!(r.htmlStreaming || r.jsStreaming);
+        return h(
+          "div",
+          { ...hostBase, className: cls + (renderErr ? " sc-has-error" : "") },
+          renderErr && h("div", { className: "sc-logic-error" }, renderErr),
+          h(
+            AncestorContext.Provider,
+            { value: [...chain, this.__name] },
+            r.tpl(vals, this)
+          )
+        );
+      }
+    }
+    __publicField(StreamableComponent, "contextType", AncestorContext);
+    const named = /* @__PURE__ */ new Map();
+    function getDC(name) {
+      const hit = named.get(name);
+      if (hit) return hit;
+      function Dispatcher(p) {
+        const [, setTick] = React.useState(0);
+        React.useEffect(() => {
+          const sub = () => setTick((n) => n + 1);
+          registry.get(name).subs.add(sub);
+          return () => {
+            registry.get(name).subs.delete(sub);
+          };
+        }, []);
+        ensureFetched(name);
+        return h(StreamableComponent, { ...p, __name: name });
+      }
+      Dispatcher.displayName = name;
+      named.set(name, Dispatcher);
+      return Dispatcher;
+    }
+    return {
+      getDC,
+      StreamableComponent
+    };
+  }
+
+  // src/external.ts
+  var isCustomElementName = (n) => !n.includes(".") && n.includes("-");
+  function isRenderableType(g) {
+    if (typeof g === "function") return !isElementClass(g);
+    return typeof g === "object" && g !== null && typeof g.$$typeof === "symbol";
+  }
+  function resolveDottedPath(root, name) {
+    let cur = root;
+    for (const seg of name.split(".")) {
+      if (cur == null) return void 0;
+      cur = cur[seg];
+    }
+    return cur;
+  }
+  var BABEL_URL = "https://unpkg.com/@babel/standalone@7.26.4/babel.min.js";
+  var GLOBAL_POLL_INTERVAL_MS = 50;
+  var GLOBAL_POLL_TIMEOUT_MS = 3e4;
+  function createExternalModules(onResolved) {
+    const cache = /* @__PURE__ */ new Map();
+    let babelLoading = null;
+    const reportedMissing = /* @__PURE__ */ new Map();
+    const polling = /* @__PURE__ */ new Set();
+    function ensureBabel() {
+      if (window.Babel) return Promise.resolve();
+      if (babelLoading) return babelLoading;
+      babelLoading = new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = BABEL_URL;
+        s.crossOrigin = "anonymous";
+        s.onload = () => res();
+        s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      return babelLoading;
+    }
+    function load(kind, url) {
+      if (cache.has(url)) return;
+      cache.set(url, null);
+      console.info("[dc-runtime] x-import: loading", url, "(" + kind + ")");
+      const ready = kind === "jsx" ? ensureBabel() : Promise.resolve();
+      ready.then(() => fetch(url)).then((r) => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      }).then((src) => {
+        const code = kind === "jsx" ? window.Babel.transform(src, {
+          filename: url,
+          presets: ["react", "typescript"]
+        }).code : src;
+        const module = { exports: {} };
+        const before = new Set(Object.keys(window));
+        //! nosemgrep: eval-and-function-constructor
+        new Function("React", "module", "exports", "require", code)(
+          getReact(),
+          module,
+          module.exports,
+          () => ({})
+        );
+        const globals = {};
+        for (const k of Object.keys(window)) {
+          if (!before.has(k) && typeof window[k] === "function") {
+            globals[k] = window[k];
+          }
+        }
+        cache.set(url, { mod: module.exports, globals });
+        console.info(
+          "[dc-runtime] x-import: loaded",
+          url,
+          "\u2014 exports:",
+          Object.keys(module.exports),
+          "window globals:",
+          Object.keys(globals)
+        );
+        onResolved();
+      }).catch((e) => {
+        cache.set(url, {
+          mod: {},
+          globals: {},
+          error: "failed to load: " + (e instanceof Error && e.message ? e.message : String(e))
+        });
+        console.error(
+          "[dc-runtime] x-import: FAILED to load",
+          url,
+          "(" + kind + ")",
+          e
+        );
+        onResolved();
+      });
+    }
+    function resolve2(url, name) {
+      const entry = cache.get(url);
+      if (!entry) return null;
+      const { mod, globals } = entry;
+      const C = mod && mod[name] || globals && globals[name] || typeof window !== "undefined" && window[name] || mod && mod.default;
+      if (typeof C === "function") return C;
+      const key = url + "\0" + name;
+      if (!reportedMissing.has(key)) {
+        reportedMissing.set(
+          key,
+          entry.error || 'no export named "' + name + '" (has: ' + Object.keys(mod).join(", ") + ")"
+        );
+        console.error(
+          "[dc-runtime] x-import: module",
+          url,
+          "loaded but has no component named",
+          JSON.stringify(name),
+          "\u2014 available exports:",
+          Object.keys(mod),
+          "window globals:",
+          Object.keys(globals),
+          ". The module must `module.exports = {" + name + "}` or set `window." + name + "`."
+        );
+      }
+      return null;
+    }
+    function waitForGlobal(name) {
+      if (polling.has(name)) return;
+      polling.add(name);
+      const started = Date.now();
+      const isCE = isCustomElementName(name);
+      const tick = () => {
+        const found = isCE ? customElements.get(name) : isRenderableType(resolveDottedPath(window, name));
+        if (found) {
+          polling.delete(name);
+          onResolved();
+          return;
+        }
+        if (Date.now() - started >= GLOBAL_POLL_TIMEOUT_MS) {
+          console.warn(
+            "[dc-runtime] x-import: global",
+            JSON.stringify(name),
+            "never appeared on window after " + GLOBAL_POLL_TIMEOUT_MS + "ms"
+          );
+          return;
+        }
+        setTimeout(tick, GLOBAL_POLL_INTERVAL_MS);
+      };
+      setTimeout(tick, GLOBAL_POLL_INTERVAL_MS);
+    }
+    function resolveGlobal(url, name) {
+      const isCE = isCustomElementName(name);
+      if (!url) {
+        if (isCE) {
+          if (customElements.get(name)) return name;
+          waitForGlobal(name);
+          return null;
+        }
+        const g2 = resolveDottedPath(window, name);
+        if (isRenderableType(g2)) return g2;
+        waitForGlobal(name);
+        return null;
+      }
+      const entry = cache.get(url);
+      if (!entry) return null;
+      if (isCE && customElements.get(name)) return name;
+      const g = entry.globals[name] ?? resolveDottedPath(window, name);
+      if (isRenderableType(g)) return g;
+      if (name.includes(".")) return null;
+      const key = url + "\0global\0" + name;
+      if (!reportedMissing.has(key)) {
+        reportedMissing.set(key, null);
+        if (isCE && !customElements.get(name)) {
+          console.warn(
+            "[dc-runtime] x-import:",
+            url,
+            "loaded but no custom element",
+            JSON.stringify(name),
+            "is registered and window." + name + " is not a function \u2014 rendering <" + name + "> as an unknown element."
+          );
+        }
+      }
+      return name;
+    }
+    function getError(url, name) {
+      const entry = cache.get(url);
+      if (entry?.error) return entry.error;
+      return reportedMissing.get(url + "\0" + name) || null;
+    }
+    return { load, resolve: resolve2, resolveGlobal, getError };
+  }
+  function isElementClass(g) {
+    try {
+      return typeof g === "function" && typeof HTMLElement !== "undefined" && g.prototype instanceof HTMLElement;
+    } catch {
+      return false;
+    }
+  }
+
+  // src/helmet.ts
+  function createHelmetManager(doc, isStreaming) {
+    const mounted = /* @__PURE__ */ new Set();
+    const live = /* @__PURE__ */ new Map();
+    function compile(node) {
+      const raw = [...node.children];
+      const helmetClosed = node.nextSibling != null || node.parentNode?.nextSibling != null;
+      return (_vals, ctx) => {
+        const name = ctx && ctx.__name || "";
+        const streaming = !!(name && isStreaming(name));
+        for (let i = 0; i < raw.length; i++) {
+          const child = raw[i];
+          const tag = child.tagName;
+          const mayBePartial = streaming && !helmetClosed && i === raw.length - 1;
+          if (tag === "SCRIPT") {
+            if (mayBePartial) continue;
+            const key = "SCRIPT|" + (child.getAttribute("src") || child.textContent || "");
+            if (mounted.has(key)) continue;
+            mounted.add(key);
+            const el = doc.createElement("script");
+            for (const { name: an, value } of [...child.attributes])
+              el.setAttribute(an, value);
+            if (child.textContent) el.textContent = child.textContent;
+            doc.head.appendChild(el);
+          } else if (tag === "LINK" || tag === "META") {
+            if (mayBePartial) continue;
+            const key = tag + "|" + (child.getAttribute("href") || child.getAttribute("src") || child.outerHTML);
+            if (mounted.has(key)) continue;
+            mounted.add(key);
+            doc.head.appendChild(child.cloneNode(true));
+          } else {
+            const key = name + "|" + i;
+            let el = live.get(key);
+            if (!el || el.tagName !== tag) {
+              if (el) el.remove();
+              el = doc.createElement(tag.toLowerCase());
+              live.set(key, el);
+              doc.head.appendChild(el);
+            }
+            for (const { name: an, value } of [...child.attributes]) {
+              if (el.getAttribute(an) !== value) el.setAttribute(an, value);
+            }
+            if (el.textContent !== child.textContent)
+              el.textContent = child.textContent;
+          }
+        }
+        return null;
+      };
+    }
+    return { compile };
+  }
+
+  // src/pseudo.ts
+  function createPseudoSheet(doc) {
+    let el = null;
+    const cache = /* @__PURE__ */ new Map();
+    let n = 0;
+    return (pseudo, css) => {
+      const k = pseudo + "|" + css;
+      const hit = cache.get(k);
+      if (hit) return hit;
+      if (!el) {
+        el = doc.createElement("style");
+        doc.head.appendChild(el);
+      }
+      const cls = "scp" + (n++).toString(36);
+      const sel = pseudo === "before" || pseudo === "after" ? "." + cls + "::" + pseudo : "." + cls + ":" + pseudo;
+      el.sheet.insertRule(sel + "{" + css + "}", el.sheet.cssRules.length);
+      cache.set(k, cls);
+      return cls;
+    };
+  }
+
+  // src/registry.ts
+  function createRegistry() {
+    const entries = /* @__PURE__ */ Object.create(null);
+    function get(name) {
+      return entries[name] || (entries[name] = {
+        html: "",
+        tpl: null,
+        Logic: null,
+        jsStreaming: false,
+        htmlStreaming: false,
+        ver: 0,
+        subs: /* @__PURE__ */ new Set(),
+        fetched: false
+      });
+    }
+    function bump(name) {
+      const r = get(name);
+      r.ver++;
+      for (const fn of r.subs) fn();
+    }
+    return {
+      entries,
+      get,
+      bump,
+      bumpAll() {
+        for (const n in entries) bump(n);
+      }
+    };
+  }
+
+  // src/runtime.ts
+  var COMPONENT_DIR = ".";
+  function createRuntime(doc = document) {
+    const registry = createRegistry();
+    const pseudoClass = createPseudoSheet(doc);
+    const helmet = createHelmetManager(
+      doc,
+      (name) => registry.get(name).htmlStreaming
+    );
+    const external = createExternalModules(() => registry.bumpAll());
+    const factory = createComponentFactory(registry, ensureFetched);
+    const host = {
+      component: (name) => factory.getDC(name),
+      placeholder: (props) => h(Placeholder, props),
+      helmet: (node) => helmet.compile(node),
+      loadExternal: (kind, url) => external.load(kind, url),
+      resolveExternal: (url, name) => external.resolve(url, name),
+      resolveExternalGlobal: (url, name) => external.resolveGlobal(url, name),
+      resolveExternalError: (url, name) => external.getError(url, name),
+      pseudoClass
+    };
+    function ensureFetched(name) {
+      const r = registry.get(name);
+      if (r.fetched) return;
+      r.fetched = true;
+      const url = COMPONENT_DIR + "/" + name + ".dc.html";
+      fetch(url).then((res) => {
+        if (!res.ok) {
+          console.error(
+            "[dc-runtime] sibling fetch for <" + name + "/> failed:",
+            url,
+            "returned",
+            res.status,
+            "\u2014 the reference renders as an empty placeholder."
+          );
+          return "";
+        }
+        return res.text();
+      }).then((t) => {
+        if (!t) return;
+        const parsed = parseDcText(t);
+        if (!parsed) {
+          console.error(
+            "[dc-runtime] sibling fetch for <" + name + "/>:",
+            url,
+            "has no <x-dc> block \u2014 not a Design Component."
+          );
+          return;
+        }
+        if (parsed.props) r.propsMeta = parsed.props;
+        if (parsed.preview) r.preview = parsed.preview;
+        if (parsed.template && !r.html) updateHtml(name, parsed.template);
+        if (parsed.js && !r.Logic) updateJs(name, parsed.js);
+      }).catch(
+        (e) => console.error(
+          "[dc-runtime] sibling fetch for <" + name + "/> threw:",
+          url,
+          e
+        )
+      );
+    }
+    function updateHtml(name, html) {
+      const r = registry.get(name);
+      r.html = html;
+      try {
+        r.tpl = compileTemplate(html, host);
+      } catch (e) {
+        console.error("[dc-runtime] template compile FAILED for", name, e);
+      }
+      registry.bump(name);
+    }
+    function updateJs(name, src) {
+      const r = registry.get(name);
+      const seq = r.jsSeq = (r.jsSeq || 0) + 1;
+      try {
+        const Cls = evalDcLogic(src);
+        if (r.jsSeq !== seq) return;
+        if (typeof Cls !== "function") {
+          r.logicError = name + ".dc.html: <script data-dc-script> must define `class Component extends DCLogic`";
+        } else {
+          r.logicError = null;
+          r.Logic = Cls;
+        }
+      } catch (e) {
+        if (r.jsSeq !== seq) return;
+        console.error(
+          "[dc-runtime] logic class eval FAILED for",
+          name,
+          "\u2014 the template renders with props only.",
+          e
+        );
+        r.logicError = name + ": " + (e instanceof Error && e.message ? e.message : String(e));
+      }
+      registry.bump(name);
+    }
+    function setStreaming(name, kind, on) {
+      const r = registry.get(name);
+      if (kind === "html") r.htmlStreaming = !!on;
+      else r.jsStreaming = !!on;
+      let any = false;
+      for (const n in registry.entries) {
+        const e = registry.entries[n];
+        if (e && (e.htmlStreaming || e.jsStreaming)) {
+          any = true;
+          break;
+        }
+      }
+      doc.documentElement.classList.toggle("sc-dc-streaming", any);
+      registry.bump(name);
+    }
+    function dcUpdate(name, kind, content, streaming) {
+      if (streaming) registry.get(name).fetched = true;
+      if (kind === "html") {
+        setStreaming(name, "html", !!streaming);
+        updateHtml(name, content);
+      } else if (kind === "js") {
+        setStreaming(name, "js", !!streaming);
+        if (!streaming) updateJs(name, content);
+      } else if (kind === "props") {
+        const { props, preview } = parseDataProps(content);
+        const r = registry.get(name);
+        r.propsMeta = props ?? void 0;
+        r.preview = preview;
+        registry.bump(name);
+      }
+    }
+    function setProps(name, overrides) {
+      registry.get(name).propOverrides = overrides && typeof overrides === "object" ? { ...overrides } : null;
+      registry.bump(name);
+    }
+    function adoptParsed(name, parsed) {
+      if (!parsed) return;
+      const r = registry.get(name);
+      if (parsed.props) r.propsMeta = parsed.props;
+      if (parsed.preview) r.preview = parsed.preview;
+      if (parsed.template) updateHtml(name, parsed.template);
+      if (parsed.js) updateJs(name, parsed.js);
+    }
+    return {
+      registry,
+      getDC: factory.getDC,
+      updateHtml,
+      updateJs,
+      dcUpdate,
+      setProps,
+      adoptParsed,
+      markFetched: (name) => {
+        registry.get(name).fetched = true;
+      },
+      annotatedTemplate: (name) => {
+        const r = registry.get(name);
+        return r.tpl && r.tpl.__annotated || null;
+      },
+      templateSource: (name) => registry.get(name).html || null,
+      StreamableLogic
+    };
+  }
+
+  // src/index.ts
+  var REACT_URL = "https://unpkg.com/react@18.3.1/umd/react.production.min.js";
+  var REACT_SRI = "sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z";
+  var REACT_DOM_URL = "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js";
+  var REACT_DOM_SRI = "sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1";
+  function hideRawTemplate() {
+    const s = document.createElement("style");
+    s.textContent = "x-dc{display:none!important}";
+    document.head.appendChild(s);
+  }
+  function loadScript(src, integrity) {
+    return new Promise((resolve2, reject) => {
+      //! nosemgrep: create-script-element
+      const s = document.createElement("script");
+      s.src = src;
+      s.integrity = integrity;
+      s.crossOrigin = "anonymous";
+      s.async = false;
+      s.onload = () => resolve2();
+      s.onerror = () => reject(new Error(`failed to load ${src}`));
+      document.head.appendChild(s);
+    });
+  }
+  function loadReactUmd() {
+    const w = window;
+    if (w.React && w.ReactDOM) return Promise.resolve();
+    return Promise.all([
+      loadScript(REACT_URL, REACT_SRI),
+      loadScript(REACT_DOM_URL, REACT_DOM_SRI)
+    ]).then(() => void 0);
+  }
+  function init() {
+    const runtime = createRuntime(document);
+    let rootName = "Root";
+    const baseCss = document.createElement("style");
+    baseCss.textContent = BASE_CSS;
+    document.head.prepend(baseCss);
+    const notifyHost = () => {
+      if (window.parent === window) return;
+      const r = runtime.registry.entries[rootName];
+      try {
+        window.parent.postMessage(
+          {
+            type: "__dc_booted",
+            rootName,
+            propsMeta: r && r.propsMeta || null,
+            preview: r && r.preview || null
+          },
+          "*"
+        );
+      } catch {
+      }
+    };
+    const api = {
+      __dcUpdate: (name, kind, content, streaming) => {
+        runtime.dcUpdate(name, kind, content, streaming);
+        if (name === rootName && !streaming && kind === "props") notifyHost();
+      },
+      __dcSetProps: (name, overrides) => runtime.setProps(name, overrides),
+      /** Name of the component currently mounted as the page root — DC tools
+       *  push their template-stream here when targeting "the open page". */
+      __dcRootName: () => rootName,
+      /** Editor bridge — the encoded, `data-dc-tpl`-annotated template source.
+       *  The host editor parses this into its own template DOM so it can map a
+       *  rendered node (carrying the same `data-dc-tpl`) back to the source
+       *  node that emitted it. Returns the encoded form (`<sc-comp>`,
+       *  `sc-camel-*` attrs); the editor decodes on serialize. */
+      __dcAnnotatedTemplate: (name) => runtime.annotatedTemplate(name),
+      /** Editor bridge — the *original* (decoded) template source. */
+      __dcTemplateSource: (name) => runtime.templateSource(name),
+      __dcBoot: () => {
+        rootName = boot(runtime, document) ?? rootName;
+        notifyHost();
+      },
+      __dcRegistry: runtime.registry.entries,
+      getDC: (name) => runtime.getDC(name),
+      // `DCLogic` is the documented base class name; `StreamableLogic` is the
+      // implementation alias kept for any project that already references it.
+      DCLogic: runtime.StreamableLogic,
+      StreamableLogic: runtime.StreamableLogic
+    };
+    Object.assign(window, api);
+    if (document.readyState !== "loading") api.__dcBoot();
+    else document.addEventListener("DOMContentLoaded", () => api.__dcBoot());
+  }
+  hideRawTemplate();
+  loadReactUmd().then(init).catch((err) => {
+    console.error("[dc] failed to load React or boot:", err);
+    throw err;
+  });
+})();
+
+</script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: #eef0f2; font-family: "IBM Plex Sans Thai","IBM Plex Sans",system-ui,sans-serif; color: #1b1f24; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  ::placeholder { color: #aab1b9; }
+  textarea, input { font-family: inherit; }
+  *::-webkit-scrollbar { width: 11px; height: 11px; }
+  *::-webkit-scrollbar-thumb { background: #cfd5db; border-radius: 6px; border: 3px solid #fff; }
+</style>
+</helmet>
+
+<div style="height:100vh; display:flex; flex-direction:column; overflow:hidden;">
+
+  <!-- ===== TOP BAR ===== -->
+  <div style="display:flex; align-items:center; gap:16px; background:#fff; border-bottom:1px solid #e2e6ea; padding:12px 22px; flex-shrink:0; z-index:5;">
+    <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+      <div style="width:13px;height:13px;border-radius:3px;background:#1f6fd6;"></div>
+      <span style="font-weight:700; font-size:16px; white-space:nowrap;">คลังความรู้ Boardman</span>
+    </div>
+    <div style="flex:1; max-width:560px; display:flex; align-items:center; gap:9px; background:#f1f3f5; border:1px solid #e2e6ea; border-radius:10px; padding:10px 14px;">
+      <span style="font-size:15px; color:#9aa1a9;">⌕</span>
+      <input value="{{ query }}" onInput="{{ setQuery }}" onChange="{{ setQuery }}" placeholder="ค้นหา tag, ค่า, ขั้นตอน...  เช่น FIC-1023 หรือ trip P-301" style="border:none; background:transparent; outline:none; width:100%; font-size:14px; color:#1b1f24;" class="mono" />
+      <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ false }}">
+        <span onClick="{{ clearQuery }}" style="cursor:pointer; color:#9aa1a9; font-size:16px; padding:0 2px;">×</span>
+      </sc-if>
+    </div>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+      <span class="mono" style="font-size:11.5px; color:#9aa1a9;">{{ totalCount }} รายการ</span>
+      <div onClick="{{ openAdd }}" style="cursor:pointer; background:#1f6fd6; color:#fff; font-size:14px; font-weight:600; padding:10px 16px; border-radius:10px; display:flex; align-items:center; gap:6px; white-space:nowrap; flex-shrink:0;" style-hover="background:#1a60bd;">
+        <span style="font-size:16px; line-height:1;">+</span> เพิ่มข้อมูล
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1; display:flex; min-height:0;">
+
+    <!-- ===== SIDEBAR ===== -->
+    <div style="width:236px; background:#fff; border-right:1px solid #e2e6ea; padding:18px 12px; flex-shrink:0; overflow-y:auto;">
+      <div class="mono" style="font-size:10.5px; color:#9aa1a9; letter-spacing:0.12em; padding:0 10px 9px;">หมวดหมู่</div>
+
+      <!-- ALL -->
+      <div onClick="{{ selectAll }}" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:9px; margin-bottom:2px; background: {{ allBg }}; color: {{ allFg }};">
+        <span style="width:8px;height:8px;border-radius:2px; background:#8a95a0;"></span>
+        <span style="font-size:13.5px; font-weight:500;">ทั้งหมด</span>
+        <span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">{{ totalCount }}</span>
+      </div>
+
+      <!-- PINNED -->
+      <div onClick="{{ selectPinned }}" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:9px; margin-bottom:8px; background: {{ pinBg }}; color: {{ pinFg }};">
+        <span style="color:#d98a00;">★</span>
+        <span style="font-size:13.5px; font-weight:600; white-space:nowrap;">ปักหมุด</span>
+        <span class="mono" style="margin-left:auto; font-size:11px; color:#c79a4a;">{{ pinnedCount }}</span>
+      </div>
+
+      <div style="height:1px; background:#eef0f2; margin:0 10px 8px;"></div>
+
+      <sc-for list="{{ categories }}" as="c" hint-placeholder-count="6">
+        <div onClick="{{ c.select }}" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:9px; margin-bottom:2px; background: {{ c.bg }}; color: {{ c.fg }};">
+          <span style="width:8px;height:8px;border-radius:50%; background: {{ c.dot }};"></span>
+          <span style="font-size:13.5px; font-weight: {{ c.weight }};">{{ c.label }}</span>
+          <span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">{{ c.count }}</span>
+        </div>
+      </sc-for>
+
+      <div style="margin-top:18px; padding:13px 12px; background:#f6f8fa; border:1px dashed #d3d8de; border-radius:10px;">
+        <div style="font-size:11.5px; color:#6b7480; line-height:1.55;">💡 ลากไฟล์ <b>PDF / Excel</b> หรือกด <b>Ctrl+V</b> วางภาพแคปหน้าจอ DCS มาที่หน้านี้ได้เลย</div>
+      </div>
+    </div>
+
+    <!-- ===== MAIN ===== -->
+    <div style="flex:1; overflow-y:auto; min-width:0;">
+
+      <!-- DETAIL VIEW -->
+      <sc-if value="{{ showDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:860px; margin:0 auto; padding:26px 32px;">
+          <div onClick="{{ closeDetail }}" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#5b636c; margin-bottom:18px;">‹ กลับไปรายการ</div>
+          <div style="background:#fff; border:1px solid #e2e6ea; border-radius:14px; overflow:hidden;">
+            <div style="border-top:4px solid {{ detail.statusColor }}; padding:24px 28px;">
+              <div style="display:flex; align-items:flex-start; gap:14px;">
+                <span class="mono" style="font-size:16px; font-weight:600; background:#eaf2fd; color:#1f6fd6; padding:4px 11px; border-radius:7px;">{{ detail.tag }}</span>
+                <div style="margin-left:auto; display:flex; gap:8px;">
+                  <div onClick="{{ togglePinDetail }}" style="cursor:pointer; font-size:13px; font-weight:600; padding:8px 13px; border-radius:8px; border:1px solid #e2e6ea; color: {{ detail.pinColor }};">{{ detail.pinLabel }}</div>
+                  <div onClick="{{ editDetail }}" style="cursor:pointer; font-size:13px; font-weight:600; padding:8px 13px; border-radius:8px; border:1px solid #e2e6ea; color:#3a424c;">แก้ไข</div>
+                  <div onClick="{{ deleteDetail }}" style="cursor:pointer; font-size:13px; font-weight:600; padding:8px 13px; border-radius:8px; border:1px solid #f2d4d2; color:#d23b34;">ลบ</div>
+                </div>
+              </div>
+              <h1 style="font-size:24px; font-weight:700; margin:16px 0 12px; line-height:1.25;">{{ detail.title }}</h1>
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:4px;">
+                <span style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#5b636c; background:#f1f3f5; padding:4px 10px; border-radius:6px;"><span style="width:7px;height:7px;border-radius:50%;background:{{ detail.statusColor }};"></span>{{ detail.categoryLabel }} · {{ detail.statusLabel }}</span>
+                <span class="mono" style="font-size:11px; color:#9aa1a9; border:1px solid #e2e6ea; padding:3px 8px; border-radius:5px;">{{ detail.source }}</span>
+                <span style="font-size:11.5px; color:#9aa1a9;">{{ detail.updatedText }}</span>
+              </div>
+            </div>
+            <div style="padding:0 28px 26px;">
+              <div class="mono" style="white-space:pre-wrap; font-size:14px; line-height:1.85; color:#2a323b; background:#f8fafb; border:1px solid #eef0f2; border-radius:10px; padding:18px 20px;">{{ detail.content }}</div>
+              <sc-if value="{{ detail.image }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:16px;">
+                  <div class="mono" style="font-size:11px; color:#9aa1a9; margin-bottom:8px;">ภาพแนบ</div>
+                  <img src="{{ detail.image }}" style="max-width:100%; border-radius:10px; border:1px solid #e2e6ea;" />
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- LIST VIEW -->
+      <sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:1040px; margin:0 auto; padding:24px 30px 60px;">
+
+          <!-- EMPTY STATE -->
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ openAdd }}" style="cursor:pointer; margin-top:40px; border:2px dashed #cfd5db; border-radius:16px; padding:64px 30px; text-align:center; background:#fff;">
+              <div style="font-size:40px; color:#c2c8cf; margin-bottom:14px;">↧</div>
+              <div style="font-size:17px; font-weight:600; margin-bottom:6px;">ยังไม่มีข้อมูลในหมวดนี้</div>
+              <div style="font-size:13.5px; color:#6b7480; line-height:1.6;">ลากไฟล์ PDF/Excel มาวาง · กด Ctrl+V วางภาพ · หรือกด “เพิ่มข้อมูล”</div>
+            </div>
+          </sc-if>
+
+          <!-- PINNED SECTION -->
+          <sc-if value="{{ showPinnedSection }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:13px;">
+              <span style="color:#d98a00; font-size:15px;">★</span>
+              <span style="font-size:13px; font-weight:700; letter-spacing:0.04em; white-space:nowrap;">ปักหมุด</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-bottom:30px;">
+              <sc-for list="{{ pinnedItems }}" as="it" hint-placeholder-count="2">
+                <div onClick="{{ it.open }}" style="cursor:pointer; background:#fff; border:1px solid #e2e6ea; border-left:3px solid #1f6fd6; border-radius:11px; padding:16px;" style-hover="border-color:#bcd3f2;">
+                  <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:9px;">
+                    <span class="mono" style="font-size:13px; font-weight:600; background:#eaf2fd; color:#1f6fd6; padding:2px 9px; border-radius:6px;">{{ it.tag }}</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px;">{{ it.source }}</span>
+                      <span onClick="{{ it.togglePin }}" style="cursor:pointer; color:#d98a00; font-size:15px;">★</span>
+                    </div>
+                  </div>
+                  <div style="font-size:14.5px; font-weight:600; margin-bottom:7px; line-height:1.3;">{{ it.title }}</div>
+                  <div class="mono" style="font-size:12px; color:#5b636c; line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ it.snippet }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- LIST HEADER -->
+          <sc-if value="{{ showListHeader }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; align-items:center; gap:9px; margin-bottom:13px;">
+              <span style="font-size:13px; font-weight:700; letter-spacing:0.04em;">{{ listLabel }}</span>
+              <span class="mono" style="font-size:11px; color:#9aa1a9;">{{ resultCount }}</span>
+            </div>
+          </sc-if>
+
+          <!-- ROWS -->
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <sc-for list="{{ listItems }}" as="it" hint-placeholder-count="5">
+              <div onClick="{{ it.open }}" style="cursor:pointer; background:#fff; border:1px solid #e2e6ea; border-radius:10px; padding:13px 15px; display:flex; align-items:center; gap:13px;" style-hover="border-color:#bcd3f2;">
+                <span style="width:8px;height:8px;border-radius:50%; flex-shrink:0; background: {{ it.statusColor }};"></span>
+                <span class="mono" style="font-size:12.5px; font-weight:600; color:#1f6fd6; width:100px; flex-shrink:0;">{{ it.tag }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ it.title }}</div>
+                  <div class="mono" style="font-size:11.5px; color:#9aa1a9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ it.snippet }}</div>
+                </div>
+                <span style="font-size:11.5px; color:#9aa1a9; flex-shrink:0;">{{ it.categoryLabel }}</span>
+                <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px; flex-shrink:0;">{{ it.source }}</span>
+                <span onClick="{{ it.togglePin }}" style="cursor:pointer; font-size:15px; flex-shrink:0; color: {{ it.pinColor }};">{{ it.pinSymbol }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- ===== ADD / EDIT MODAL ===== -->
+  <sc-if value="{{ showAdd }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(20,28,38,0.45); display:flex; align-items:flex-start; justify-content:center; padding:40px 20px; z-index:50; overflow-y:auto;" onClick="{{ closeModal }}">
+      <div onClick="{{ stop }}" style="background:#fff; border-radius:16px; width:100%; max-width:680px; box-shadow:0 20px 60px rgba(15,23,35,0.3);">
+        <!-- modal header -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #eef0f2;">
+          <span style="font-size:17px; font-weight:700;">{{ modalTitle }}</span>
+          <span onClick="{{ closeModal }}" style="cursor:pointer; font-size:22px; color:#9aa1a9; line-height:1;">×</span>
+        </div>
+
+        <div style="padding:22px 24px;">
+          <!-- DROPZONE -->
+          <div onDrop="{{ onDropZone }}" onDragOver="{{ onDragOverZone }}" onDragLeave="{{ onDragLeaveZone }}" onClick="{{ triggerFile }}" style="cursor:pointer; border:2px dashed {{ dropBorder }}; background: {{ dropBg }}; border-radius:12px; padding:22px; text-align:center; margin-bottom:8px;">
+            <div style="font-size:13.5px; font-weight:600; color:#3a424c; margin-bottom:3px;">↧ ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</div>
+            <div class="mono" style="font-size:11.5px; color:#9aa1a9;">PDF · Excel (.xlsx/.xls) · รูปภาพ · หรือกด Ctrl+V วางภาพแคปหน้าจอ</div>
+            <input type="file" ref="{{ setFileRef }}" onChange="{{ onFileInput }}" accept=".pdf,.xlsx,.xls,.csv,.txt,image/*" multiple style="display:none;" />
+          </div>
+
+          <!-- processing -->
+          <sc-if value="{{ processing }}" hint-placeholder-val="{{ false }}">
+            <div class="mono" style="font-size:12px; color:#1f6fd6; background:#eaf2fd; border-radius:8px; padding:9px 12px; margin-bottom:8px;">{{ processing }}</div>
+          </sc-if>
+
+          <!-- image preview -->
+          <sc-if value="{{ form.image }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:12px; align-items:flex-start; background:#f8fafb; border:1px solid #eef0f2; border-radius:10px; padding:12px; margin-bottom:12px;">
+              <img src="{{ form.image }}" style="width:120px; height:80px; object-fit:cover; border-radius:7px; border:1px solid #e2e6ea;" />
+              <div style="flex:1;">
+                <div style="font-size:12.5px; color:#5b636c; margin-bottom:8px;">ภาพแนบแล้ว</div>
+                <div style="display:flex; gap:8px;">
+                  <div onClick="{{ runOCR }}" style="cursor:pointer; font-size:12px; font-weight:600; color:#1f6fd6; border:1px solid #bcd3f2; background:#eaf2fd; padding:6px 11px; border-radius:7px;">{{ ocrLabel }}</div>
+                  <div onClick="{{ removeImage }}" style="cursor:pointer; font-size:12px; color:#d23b34; border:1px solid #f2d4d2; padding:6px 11px; border-radius:7px;">เอาออก</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- form fields -->
+          <div style="display:flex; gap:12px; margin-bottom:12px;">
+            <div style="width:200px;">
+              <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:5px;">TAG</label>
+              <input value="{{ form.tag }}" onInput="{{ setTag }}" onChange="{{ setTag }}" placeholder="เช่น FIC-1023" class="mono" style="width:100%; font-size:13.5px; padding:9px 11px; border:1px solid #e2e6ea; border-radius:8px; outline:none;" />
+            </div>
+            <div style="flex:1;">
+              <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:5px;">ชื่อรายการ</label>
+              <input value="{{ form.title }}" onInput="{{ setTitle }}" onChange="{{ setTitle }}" placeholder="เช่น Feed Flow Control — Setpoint" style="width:100%; font-size:13.5px; padding:9px 11px; border:1px solid #e2e6ea; border-radius:8px; outline:none;" />
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:6px;">หมวดหมู่</label>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ catOptions }}" as="o" hint-placeholder-count="6">
+                <div onClick="{{ o.select }}" style="cursor:pointer; font-size:12.5px; font-weight:500; padding:7px 12px; border-radius:20px; border:1px solid {{ o.border }}; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:6px;">สถานะ / ความสำคัญ</label>
+            <div style="display:flex; gap:7px;">
+              <sc-for list="{{ statusOptions }}" as="o" hint-placeholder-count="3">
+                <div onClick="{{ o.select }}" style="cursor:pointer; font-size:12.5px; font-weight:500; padding:7px 14px; border-radius:8px; border:1px solid {{ o.border }}; background:{{ o.bg }}; color:{{ o.fg }}; display:flex; align-items:center; gap:7px;"><span style="width:7px;height:7px;border-radius:50%;background:{{ o.dot }};"></span>{{ o.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-bottom:6px;">
+            <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:5px;">เนื้อหา / รายละเอียด</label>
+            <textarea value="{{ form.content }}" onInput="{{ setContent }}" onChange="{{ setContent }}" placeholder="พิมพ์ค่า setpoint, ขั้นตอน, หรือรายละเอียด... (ถ้าลากไฟล์/วางภาพ ระบบจะเติมให้)" class="mono" style="width:100%; min-height:150px; resize:vertical; font-size:13px; line-height:1.7; padding:12px 13px; border:1px solid #e2e6ea; border-radius:8px; outline:none;"></textarea>
+          </div>
+        </div>
+
+        <!-- modal footer -->
+        <div style="display:flex; align-items:center; gap:10px; padding:16px 24px; border-top:1px solid #eef0f2;">
+          <div onClick="{{ closeModal }}" style="cursor:pointer; font-size:14px; font-weight:600; color:#5b636c; padding:10px 18px; border-radius:9px;">ยกเลิก</div>
+          <div onClick="{{ saveItem }}" style="cursor:pointer; margin-left:auto; background: {{ saveBg }}; color:#fff; font-size:14px; font-weight:600; padding:10px 22px; border-radius:9px;">{{ saveLabel }}</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- GLOBAL DRAG OVERLAY -->
+  <sc-if value="{{ globalDragging }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(31,111,214,0.10); border:3px dashed #1f6fd6; z-index:60; display:flex; align-items:center; justify-content:center; pointer-events:none;">
+      <div style="background:#fff; padding:22px 34px; border-radius:14px; box-shadow:0 12px 40px rgba(15,23,35,0.25); font-size:17px; font-weight:600; color:#1f6fd6;">↧ วางไฟล์เพื่อเพิ่มเข้าคลัง</div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  // ---- master data ----
+  CATS = [
+    { key: 'setpoint',  label: 'Setpoint / Alarm' },
+    { key: 'startup',   label: 'Start-up / Shutdown' },
+    { key: 'interlock', label: 'Interlock / C&E' },
+    { key: 'trouble',   label: 'Troubleshooting' },
+    { key: 'equipment', label: 'Equipment / P&ID' },
+    { key: 'note',      label: 'บันทึก / อื่นๆ' },
+  ];
+  STATUS = [
+    { key: 'normal', label: 'ปกติ',      color: '#1f9d57' },
+    { key: 'warn',   label: 'เฝ้าระวัง', color: '#d98a00' },
+    { key: 'alarm',  label: 'วิกฤต',     color: '#d23b34' },
+  ];
+  STORE_KEY = 'bkb_items_v2';
+
+  state = {
+    items: this.loadItems(),
+    query: '',
+    activeCat: 'all',          // 'all' | 'pinned' | category key
+    showAdd: false,
+    selectedId: null,
+    editingId: null,
+    form: this.blankForm(),
+    processing: '',
+    ocrRunning: false,
+    dropHot: false,
+    globalDragging: false,
+  };
+
+  blankForm() {
+    return { tag: '', title: '', content: '', category: 'setpoint', categoryTouched: false, status: 'normal', image: null, source: 'MANUAL' };
+  }
+
+  loadItems() {
+    try {
+      const raw = localStorage.getItem(this.STORE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return this.seed();
+  }
+
+  seed() {
+    const now = Date.now();
+    const d = (n) => now - n * 86400000;
+    return [
+      { id: 's1', tag: 'FIC-1023', title: 'Feed Flow Control — Setpoint & Alarm', category: 'setpoint', status: 'normal', source: 'XLS', pinned: true, image: null, updated: d(2),
+        content: 'SP 45.0 t/h\nAL-HH 52 / AL-H 48 / AL-L 38 / AL-LL 34 t/h\nPV ปกติ 44–46 t/h\nหมายเหตุ: ถ้า PV ต่ำกว่า 40 ให้เช็ค feed pump P-110 และ control valve FV-1023' },
+      { id: 's2', tag: 'K-401', title: 'Recycle Gas Compressor — Start-up Sequence', category: 'startup', status: 'normal', source: 'PDF', pinned: true, image: null, updated: d(6),
+        content: '1) Purge ด้วย N2 จน O2 < 0.5%\n2) Aux lube oil pump ON, ตรวจ pressure > 1.5 bar\n3) Seal gas ON\n4) Slow roll\n5) Ramp up ถึง Minimum Continuous Speed\n6) Load ตาม load curve' },
+      { id: 's3', tag: 'LSHH-205', title: 'Interlock — High Level Trip Pump P-301', category: 'interlock', status: 'alarm', source: 'IMG', pinned: false, image: null, updated: d(11),
+        content: 'LSHH-205 > 80% → TRIP P-301 + ปิด XV-210\nอ้างอิง Cause & Effect C-12\nReset ที่ local panel หลัง level กลับลงต่ำกว่า 70%' },
+      { id: 's4', tag: 'F-101', title: 'Furnace Draft Fluctuation — วิธีแก้', category: 'trouble', status: 'warn', source: 'MANUAL', pinned: false, image: null, updated: d(4),
+        content: 'อาการ: draft แกว่ง / pressure ไม่นิ่ง\nเช็ค: 1) damper ID fan  2) ID fan vibration  3) stack  4) burner air register\nเคยเจอ: damper actuator ค้าง แก้โดย manual override ชั่วคราว แล้วแจ้ง maintenance' },
+      { id: 's5', tag: 'P-301 A/B', title: 'BFW Pump — Equipment & P&ID', category: 'equipment', status: 'normal', source: 'PDF', pinned: false, image: null, updated: d(20),
+        content: 'P&ID 12-204\nRated 120 m3/h @ 95 bar\nP-301A running / P-301B auto-standby\nAuto-start เมื่อ discharge pressure < 88 bar' },
+      { id: 's6', tag: 'TIC-2210', title: 'Reactor Inlet Temp Control', category: 'setpoint', status: 'normal', source: 'XLS', pinned: false, image: null, updated: d(9),
+        content: 'SP 320 °C\nAL-H 335 / AL-L 305 °C\nควบคุมผ่าน fired heater F-201 fuel gas valve TV-2210' },
+    ];
+  }
+
+  persist(items) {
+    try { localStorage.setItem(this.STORE_KEY, JSON.stringify(items)); } catch (e) {}
+  }
+
+  componentDidMount() {
+    this.persist(this.state.items);
+    this._paste = (e) => this.onPaste(e);
+    this._dragover = (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); if (!this.state.globalDragging) this.setState({ globalDragging: true }); } };
+    this._dragleave = (e) => { if (e.relatedTarget == null || e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) this.setState({ globalDragging: false }); };
+    this._dragend = () => { if (this.state.globalDragging) this.setState({ globalDragging: false }); };
+    this._drop = (e) => { e.preventDefault(); this.setState({ globalDragging: false }); const f = e.dataTransfer && e.dataTransfer.files; if (f && f.length) { if (!this.state.showAdd) this.openAdd(); this.handleFiles(f); } };
+    document.addEventListener('paste', this._paste);
+    window.addEventListener('dragover', this._dragover);
+    window.addEventListener('dragleave', this._dragleave);
+    window.addEventListener('dragend', this._dragend);
+    window.addEventListener('drop', this._drop);
+    if (window.pdfjsLib) { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {} }
+  }
+  componentWillUnmount() {
+    document.removeEventListener('paste', this._paste);
+    window.removeEventListener('dragover', this._dragover);
+    window.removeEventListener('dragleave', this._dragleave);
+    window.removeEventListener('dragend', this._dragend);
+    window.removeEventListener('drop', this._drop);
+  }
+
+  // ---- helpers ----
+  catLabel(key) { const c = this.CATS.find(x => x.key === key); return c ? c.label : 'อื่นๆ'; }
+  statusObj(key) { return this.STATUS.find(x => x.key === key) || this.STATUS[0]; }
+  snippet(s) { return (s || '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+  timeAgo(t) {
+    if (!t) return '';
+    const diff = Date.now() - t, day = 86400000;
+    if (diff < 3600000) return 'เมื่อสักครู่';
+    if (diff < day) return 'วันนี้';
+    if (diff < 2 * day) return 'เมื่อวาน';
+    if (diff < 7 * day) return Math.floor(diff / day) + ' วันก่อน';
+    if (diff < 30 * day) return Math.floor(diff / (7 * day)) + ' สัปดาห์ก่อน';
+    return new Date(t).toLocaleDateString('th-TH');
+  }
+  extractTag(text) {
+    const m = (text || '').match(/\b[A-Z]{1,5}-?\d{2,5}(?:\s?[A-Z](?:\/[A-Z])?)?\b/);
+    return m ? m[0].trim() : '';
+  }
+  suggestCategory(text) {
+    const t = (text || '').toLowerCase();
+    if (/interlock|cause.{0,4}effect|c&e|\btrip\b|permissive|esd|sis/.test(t)) return 'interlock';
+    if (/start.?up|shut.?down|sequence|purge|ramp|procedure|ขั้นตอน/.test(t)) return 'startup';
+    if (/alarm|set.?point|\bsp\b|\bhh\b|\bll\b|operating limit|setpoint/.test(t)) return 'setpoint';
+    if (/trouble|fault|abnormal|problem|วิธีแก้|อาการ|fix|แก้ไข/.test(t)) return 'trouble';
+    if (/p&id|equipment|pump|compressor|valve|exchanger|rated|spec|อุปกรณ์/.test(t)) return 'equipment';
+    return 'note';
+  }
+
+  // ---- navigation ----
+  selectAll = () => this.setState({ activeCat: 'all', selectedId: null });
+  selectPinned = () => this.setState({ activeCat: 'pinned', selectedId: null });
+  setQuery = (e) => this.setState({ query: e.target.value });
+  clearQuery = () => this.setState({ query: '' });
+  openDetail = (id) => this.setState({ selectedId: id });
+  closeDetail = () => this.setState({ selectedId: null });
+  stop = (e) => e.stopPropagation();
+
+  togglePin = (id, e) => {
+    if (e) e.stopPropagation();
+    const items = this.state.items.map(it => it.id === id ? { ...it, pinned: !it.pinned } : it);
+    this.persist(items);
+    this.setState({ items });
+  };
+
+  // ---- add / edit ----
+  openAdd = () => this.setState({ showAdd: true, editingId: null, form: this.blankForm(), processing: '' });
+  closeModal = () => this.setState({ showAdd: false, editingId: null, processing: '', ocrRunning: false });
+  setTag = (e) => this.setState({ form: { ...this.state.form, tag: e.target.value } });
+  setTitle = (e) => this.setState({ form: { ...this.state.form, title: e.target.value } });
+  setContent = (e) => this.setState({ form: { ...this.state.form, content: e.target.value } });
+  setFileRef = (el) => { this._fileEl = el; };
+  triggerFile = () => { if (this._fileEl) this._fileEl.click(); };
+  onFileInput = (e) => { const f = e.target.files; if (f && f.length) this.handleFiles(f); e.target.value = ''; };
+  onDragOverZone = (e) => { e.preventDefault(); e.stopPropagation(); if (!this.state.dropHot) this.setState({ dropHot: true }); };
+  onDragLeaveZone = (e) => { e.preventDefault(); this.setState({ dropHot: false }); };
+  onDropZone = (e) => { e.preventDefault(); e.stopPropagation(); this.setState({ dropHot: false, globalDragging: false }); const f = e.dataTransfer.files; if (f && f.length) this.handleFiles(f); };
+  removeImage = () => this.setState({ form: { ...this.state.form, image: null } });
+
+  onPaste = (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    const active = document.activeElement;
+    const inField = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+    for (const it of items) {
+      if (it.type && it.type.indexOf('image') === 0) {
+        const file = it.getAsFile();
+        if (file && !inField) { if (!this.state.showAdd) this.openAdd(); setTimeout(() => this.handleFiles([file]), 0); e.preventDefault(); return; }
+      }
+    }
+  };
+
+  async handleFiles(fileList) {
+    const files = Array.from(fileList);
+    for (const file of files) {
+      const name = (file.name || '').toLowerCase();
+      try {
+        if (file.type.indexOf('image') === 0) {
+          const url = await this.readDataURL(file);
+          this.setState({ form: { ...this.state.form, image: url, source: 'IMG' }, processing: 'แนบภาพแล้ว — กด “อ่านข้อความจากภาพ” เพื่อดึงข้อความ (ถ้าต้องการ)' });
+        } else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) {
+          this.setState({ processing: 'กำลังอ่าน Excel…' });
+          const text = await this.parseExcel(file);
+          this.applyParsed(text, 'XLS', file.name);
+        } else if (name.endsWith('.pdf')) {
+          this.setState({ processing: 'กำลังอ่าน PDF…' });
+          const text = await this.parsePDF(file);
+          this.applyParsed(text, 'PDF', file.name);
+        } else if (/\.(txt|log|md|csv)$/i.test(name)) {
+          const text = await this.readText(file);
+          this.applyParsed(text, 'TXT', file.name);
+        } else {
+          const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : 'ไม่ทราบชนิด';
+          this.setState({ processing: '⚠️ ไม่รองรับไฟล์ชนิด .' + ext + ' — รองรับเฉพาะ PDF, Excel (.xlsx/.xls/.csv), รูปภาพ (jpg/png/gif) และ .txt' });
+        }
+      } catch (err) {
+        this.setState({ processing: 'อ่านไฟล์ไม่สำเร็จ: ' + (err && err.message ? err.message : file.name) });
+      }
+    }
+  }
+
+  applyParsed(text, source, fname) {
+    const f = this.state.form;
+    const tag = f.tag || this.extractTag(text);
+    const cat = f.categoryTouched ? f.category : this.suggestCategory(text);
+    const title = f.title || (fname ? fname.replace(/\.[^.]+$/, '') : (tag || 'รายการใหม่'));
+    const content = f.content ? (f.content + '\n\n' + text) : text;
+    this.setState({
+      form: { ...f, tag, title, content: content.slice(0, 20000), category: cat, source },
+      processing: 'ดึงข้อความสำเร็จ · ระบบเสนอ tag “' + (tag || '—') + '” และหมวด “' + this.catLabel(cat) + '” (แก้ได้)',
+    });
+  }
+
+  readDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+  readText(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(file); }); }
+  readArrayBuffer(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); }); }
+
+  async parseExcel(file) {
+    if (!window.XLSX) throw new Error('Excel reader ยังโหลดไม่เสร็จ');
+    const buf = await this.readArrayBuffer(file);
+    const wb = window.XLSX.read(buf, { type: 'array' });
+    let out = '';
+    wb.SheetNames.forEach(n => { out += '[' + n + ']\n' + window.XLSX.utils.sheet_to_csv(wb.Sheets[n]) + '\n'; });
+    return out.trim();
+  }
+  async parsePDF(file) {
+    if (!window.pdfjsLib) throw new Error('PDF reader ยังโหลดไม่เสร็จ');
+    const buf = await this.readArrayBuffer(file);
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    let out = '';
+    const max = Math.min(pdf.numPages, 30);
+    for (let i = 1; i <= max; i++) {
+      const page = await pdf.getPage(i);
+      const c = await page.getTextContent();
+      out += c.items.map(x => x.str).join(' ') + '\n';
+    }
+    return out.trim();
+  }
+
+  loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+  runOCR = async () => {
+    if (this.state.ocrRunning || !this.state.form.image) return;
+    this.setState({ ocrRunning: true, processing: 'กำลังโหลดตัวอ่านข้อความ (OCR)…' });
+    try {
+      if (!window.Tesseract) await this.loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+      this.setState({ processing: 'กำลังอ่านข้อความจากภาพ… (อาจใช้เวลาสักครู่)' });
+      const { data } = await window.Tesseract.recognize(this.state.form.image, 'eng+tha');
+      const text = (data && data.text ? data.text : '').trim();
+      const f = this.state.form;
+      const tag = f.tag || this.extractTag(text);
+      const cat = f.categoryTouched ? f.category : this.suggestCategory(text);
+      this.setState({
+        form: { ...f, tag, content: f.content ? (f.content + '\n\n' + text) : text, category: cat },
+        ocrRunning: false,
+        processing: text ? 'อ่านข้อความจากภาพสำเร็จ' : 'ไม่พบข้อความในภาพ',
+      });
+    } catch (err) {
+      this.setState({ ocrRunning: false, processing: 'OCR ไม่สำเร็จ: ' + (err && err.message ? err.message : 'error') });
+    }
+  };
+
+  saveItem = () => {
+    const f = this.state.form;
+    if (!f.title.trim() && !f.tag.trim() && !f.content.trim() && !f.image) return;
+    let items;
+    if (this.state.editingId) {
+      items = this.state.items.map(it => it.id === this.state.editingId ? { ...it, ...f, title: f.title.trim() || it.title, updated: Date.now() } : it);
+    } else {
+      const item = {
+        id: 'i' + Date.now() + Math.random().toString(36).slice(2, 6),
+        tag: f.tag.trim(), title: f.title.trim() || f.tag.trim() || 'รายการใหม่',
+        content: f.content, category: f.category, status: f.status,
+        source: f.source || 'MANUAL', image: f.image, pinned: false, updated: Date.now(),
+      };
+      items = [item, ...this.state.items];
+    }
+    this.persist(items);
+    this.setState({ items, showAdd: false, editingId: null, form: this.blankForm(), processing: '' });
+  };
+
+  editDetail = () => {
+    const it = this.state.items.find(x => x.id === this.state.selectedId);
+    if (!it) return;
+    this.setState({ showAdd: true, editingId: it.id, form: { tag: it.tag, title: it.title, content: it.content, category: it.category, categoryTouched: true, status: it.status, image: it.image || null, source: it.source }, processing: '' });
+  };
+  deleteDetail = () => {
+    const id = this.state.selectedId;
+    const items = this.state.items.filter(x => x.id !== id);
+    this.persist(items);
+    this.setState({ items, selectedId: null });
+  };
+  togglePinDetail = () => { if (this.state.selectedId) this.togglePin(this.state.selectedId); };
+
+  // ---- derived view ----
+  filtered() {
+    const q = this.state.query.trim().toLowerCase();
+    let list = this.state.items;
+    if (this.state.activeCat === 'pinned') list = list.filter(it => it.pinned);
+    else if (this.state.activeCat !== 'all') list = list.filter(it => it.category === this.state.activeCat);
+    if (q) list = list.filter(it => (it.tag + ' ' + it.title + ' ' + it.content + ' ' + this.catLabel(it.category)).toLowerCase().includes(q));
+    return list.slice().sort((a, b) => (b.pinned - a.pinned) || (b.updated - a.updated));
+  }
+
+  viewItem(it) {
+    const st = this.statusObj(it.status);
+    return {
+      id: it.id, tag: it.tag || '—', title: it.title, snippet: this.snippet(it.content),
+      categoryLabel: this.catLabel(it.category), source: it.source || 'MANUAL',
+      statusColor: st.color, pinned: it.pinned,
+      pinSymbol: it.pinned ? '★' : '☆', pinColor: it.pinned ? '#d98a00' : '#c2c8cf',
+      open: () => this.openDetail(it.id),
+      togglePin: (e) => this.togglePin(it.id, e),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const q = s.query.trim();
+    const counts = {};
+    this.CATS.forEach(c => counts[c.key] = 0);
+    let pinnedCount = 0;
+    s.items.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; if (it.pinned) pinnedCount++; });
+
+    const accentBg = '#eaf2fd', accentFg = '#1f6fd6';
+    const categories = this.CATS.map(c => {
+      const active = s.activeCat === c.key;
+      return {
+        label: c.label, count: counts[c.key] || 0,
+        bg: active ? accentBg : 'transparent', fg: active ? accentFg : '#3a424c',
+        weight: active ? '600' : '500', dot: active ? '#1f6fd6' : '#c2c8cf',
+        select: () => this.setState({ activeCat: c.key, selectedId: null }),
+      };
+    });
+
+    const list = this.filtered();
+    const detItem = s.selectedId ? s.items.find(x => x.id === s.selectedId) : null;
+    const showDetail = !!detItem;
+
+    // detail view
+    let detail = null;
+    if (detItem) {
+      const st = this.statusObj(detItem.status);
+      detail = {
+        tag: detItem.tag || '—', title: detItem.title, content: detItem.content || '(ไม่มีรายละเอียด)',
+        categoryLabel: this.catLabel(detItem.category), statusLabel: st.label, statusColor: st.color,
+        source: detItem.source || 'MANUAL', image: detItem.image || null,
+        updatedText: 'อัปเดต ' + this.timeAgo(detItem.updated),
+        pinLabel: detItem.pinned ? '★ ปักหมุดแล้ว' : '☆ ปักหมุด',
+        pinColor: detItem.pinned ? '#d98a00' : '#3a424c',
+      };
+    }
+
+    const showPinnedSection = !showDetail && s.activeCat === 'all' && !q && list.some(it => it.pinned);
+    const pinnedItems = showPinnedSection ? list.filter(it => it.pinned).map(it => this.viewItem(it)) : [];
+    const listSource = showPinnedSection ? list.filter(it => !it.pinned) : list;
+    const listItems = listSource.map(it => this.viewItem(it));
+
+    let listLabel = 'ทั้งหมด';
+    if (q) listLabel = 'ผลการค้นหา';
+    else if (s.activeCat === 'pinned') listLabel = 'ปักหมุด';
+    else if (s.activeCat !== 'all') listLabel = this.catLabel(s.activeCat);
+    else if (showPinnedSection) listLabel = 'รายการอื่น';
+
+    // form option chips
+    const f = s.form;
+    const catOptions = this.CATS.map(c => {
+      const active = f.category === c.key;
+      return { label: c.label, bg: active ? accentBg : '#fff', fg: active ? accentFg : '#5b636c', border: active ? '#bcd3f2' : '#e2e6ea', select: () => this.setState({ form: { ...this.state.form, category: c.key, categoryTouched: true } }) };
+    });
+    const statusOptions = this.STATUS.map(o => {
+      const active = f.status === o.key;
+      return { label: o.label, dot: o.color, bg: active ? '#f1f3f5' : '#fff', fg: active ? '#1b1f24' : '#5b636c', border: active ? '#cfd5db' : '#e2e6ea', select: () => this.setState({ form: { ...this.state.form, status: o.key } }) };
+    });
+
+    const canSave = !!(f.title.trim() || f.tag.trim() || f.content.trim() || f.image);
+
+    return {
+      query: s.query, hasQuery: !!q, setQuery: this.setQuery, clearQuery: this.clearQuery,
+      totalCount: s.items.length, pinnedCount,
+      allBg: (s.activeCat === 'all') ? accentBg : 'transparent', allFg: (s.activeCat === 'all') ? accentFg : '#3a424c',
+      pinBg: (s.activeCat === 'pinned') ? '#fff5e6' : 'transparent', pinFg: (s.activeCat === 'pinned') ? '#a8690a' : '#3a424c',
+      categories,
+      openAdd: this.openAdd,
+
+      showDetail, detail,
+      closeDetail: this.closeDetail, editDetail: this.editDetail, deleteDetail: this.deleteDetail, togglePinDetail: this.togglePinDetail,
+
+      showList: !showDetail,
+      isEmpty: !showDetail && list.length === 0,
+      showPinnedSection, pinnedItems,
+      showListHeader: !showDetail && list.length > 0,
+      listItems, listLabel, resultCount: list.length + ' รายการ',
+
+      // modal
+      showAdd: s.showAdd,
+      modalTitle: s.editingId ? 'แก้ไขข้อมูล' : 'เพิ่มข้อมูลใหม่',
+      form: f, setTag: this.setTag, setTitle: this.setTitle, setContent: this.setContent,
+      catOptions, statusOptions,
+      triggerFile: this.triggerFile, setFileRef: this.setFileRef, onFileInput: this.onFileInput,
+      onDropZone: this.onDropZone, onDragOverZone: this.onDragOverZone, onDragLeaveZone: this.onDragLeaveZone,
+      dropBorder: s.dropHot ? '#1f6fd6' : '#cfd5db', dropBg: s.dropHot ? '#eaf2fd' : '#f8fafb',
+      processing: s.processing,
+      removeImage: this.removeImage, runOCR: this.runOCR,
+      ocrLabel: s.ocrRunning ? 'กำลังอ่าน…' : 'อ่านข้อความจากภาพ (OCR)',
+      saveItem: this.saveItem, closeModal: this.closeModal, stop: this.stop,
+      saveLabel: s.editingId ? 'บันทึกการแก้ไข' : 'บันทึกเข้าคลัง',
+      saveBg: canSave ? '#1f6fd6' : '#aab8c6',
+
+      globalDragging: s.globalDragging,
+    };
+  }
+}
+</script>
+</body>
+</html>
