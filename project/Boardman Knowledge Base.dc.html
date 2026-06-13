@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e7e9ec; font-family: "IBM Plex Sans Thai","IBM Plex Sans",system-ui,sans-serif; color: #1b1f24; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+</style>
+</helmet>
+
+<div style="max-width: 1280px; margin: 0 auto; padding: 40px 32px 80px;">
+
+  <!-- ===== Page header ===== -->
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:8px;">
+    <div>
+      <div class="mono" style="font-size:12px; letter-spacing:0.14em; color:#7a828c; text-transform:uppercase; margin-bottom:10px;">Phase 1 · Design Exploration</div>
+      <h1 style="font-size:34px; line-height:1.15; font-weight:700; margin:0 0 8px; letter-spacing:-0.01em;">คลังความรู้ Boardman</h1>
+      <p style="font-size:16px; line-height:1.5; color:#4a525c; margin:0; max-width:640px;">ที่เก็บข้อมูลงานคุมเครื่องระบบ DCS ที่เดียวจบ — ลากไฟล์/วางภาพ/พิมพ์เข้ามา ระบบจัดหมวดให้ ค้นหา 2 วินาทีเจอ ปักหมุดของด่วนไว้บนสุด</p>
+    </div>
+    <div class="mono" style="flex-shrink:0; border:1px solid #cfd4da; border-radius:10px; padding:12px 16px; background:#fff; font-size:12px; color:#5b636c; line-height:1.7;">
+      <div><span style="color:#9aa1a9;">หน้าจอ</span> &nbsp;คอมห้องคุม (จอใหญ่)</div>
+      <div><span style="color:#9aa1a9;">ภาษา</span> &nbsp;&nbsp;ไทย + Eng เทคนิค</div>
+      <div><span style="color:#9aa1a9;">ข้อมูล</span> &nbsp;เก็บในเครื่อง · ออฟไลน์</div>
+    </div>
+  </div>
+
+  <!-- ===== Reasoning / assumptions brief ===== -->
+  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; margin:28px 0 40px;">
+    <div style="background:#fff; border:1px solid #dde1e6; border-radius:12px; padding:20px;">
+      <div class="mono" style="font-size:11px; color:#1f6fd6; letter-spacing:0.1em; margin-bottom:10px;">01 · เป้าหมาย</div>
+      <div style="font-size:15px; font-weight:600; margin-bottom:6px;">ลดภาระการจำ</div>
+      <div style="font-size:13.5px; line-height:1.55; color:#5b636c;">รวม Setpoint, Procedure, Interlock, Troubleshooting ไว้ที่เดียว ไม่ต้องเปิดหลายไฟล์ตอนเครื่องมีปัญหา</div>
+    </div>
+    <div style="background:#fff; border:1px solid #dde1e6; border-radius:12px; padding:20px;">
+      <div class="mono" style="font-size:11px; color:#1f6fd6; letter-spacing:0.1em; margin-bottom:10px;">02 · หัวใจ 3 อย่าง</div>
+      <div style="font-size:15px; font-weight:600; margin-bottom:6px;">เพิ่มง่าย · จัดหมวด · ค้นเร็ว</div>
+      <div style="font-size:13.5px; line-height:1.55; color:#5b636c;">เพิ่มได้ทั้งไฟล์ PDF/Excel, วางภาพแคปหน้าจอ DCS, หรือพิมพ์เอง — แก้หมวดหมู่เองได้เสมอ</div>
+    </div>
+    <div style="background:#fff; border:1px solid #dde1e6; border-radius:12px; padding:20px;">
+      <div class="mono" style="font-size:11px; color:#1f6fd6; letter-spacing:0.1em; margin-bottom:10px;">03 · ค่าทางเทคนิค</div>
+      <div style="font-size:15px; font-weight:600; margin-bottom:6px;">อ่านไม่ผิดพลาด</div>
+      <div style="font-size:13.5px; line-height:1.55; color:#5b636c;">Tag number และ Setpoint ใช้ฟอนต์ Monospace ทั้งหมด — เลข 0/O, 1/l ไม่สับสน สำคัญในงานคุมเครื่อง</div>
+    </div>
+  </div>
+
+  <!-- ===== Flow ===== -->
+  <div style="margin-bottom:14px; display:flex; align-items:baseline; gap:12px;">
+    <h2 style="font-size:13px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#7a828c; margin:0;" class="mono">Flow การใช้งาน</h2>
+    <div style="height:1px; background:#cfd4da; flex:1;"></div>
+  </div>
+  <div style="display:flex; align-items:stretch; gap:0; margin-bottom:48px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:180px; background:#fff; border:1px solid #dde1e6; border-radius:12px 0 0 12px; padding:18px 20px;">
+      <div class="mono" style="font-size:22px; font-weight:600; color:#c2c8cf; margin-bottom:8px;">1</div>
+      <div style="font-size:14.5px; font-weight:600; margin-bottom:4px;">เพิ่มข้อมูล</div>
+      <div style="font-size:12.5px; color:#5b636c; line-height:1.5;">ลากไฟล์ · วางภาพ (Ctrl+V) · พิมพ์เอง</div>
+    </div>
+    <div style="display:flex; align-items:center; padding:0 4px; color:#9aa1a9; font-size:18px;" class="mono">›</div>
+    <div style="flex:1; min-width:180px; background:#fff; border:1px solid #dde1e6; border-radius:0; padding:18px 20px;">
+      <div class="mono" style="font-size:22px; font-weight:600; color:#c2c8cf; margin-bottom:8px;">2</div>
+      <div style="font-size:14.5px; font-weight:600; margin-bottom:4px;">ระบบแยก & จัดหมวด</div>
+      <div style="font-size:12.5px; color:#5b636c; line-height:1.5;">ดึงข้อความ จับ tag/ค่า เสนอหมวดให้</div>
+    </div>
+    <div style="display:flex; align-items:center; padding:0 4px; color:#9aa1a9; font-size:18px;" class="mono">›</div>
+    <div style="flex:1; min-width:180px; background:#fff; border:1px solid #dde1e6; border-radius:0; padding:18px 20px;">
+      <div class="mono" style="font-size:22px; font-weight:600; color:#c2c8cf; margin-bottom:8px;">3</div>
+      <div style="font-size:14.5px; font-weight:600; margin-bottom:4px;">ค้นหา / เลือกหมวด</div>
+      <div style="font-size:12.5px; color:#5b636c; line-height:1.5;">พิมพ์คำเดียวเจอ หรือไล่ดูตามหมวด</div>
+    </div>
+    <div style="display:flex; align-items:center; padding:0 4px; color:#9aa1a9; font-size:18px;" class="mono">›</div>
+    <div style="flex:1; min-width:180px; background:#fff; border:1px solid #dde1e6; border-radius:0 12px 12px 0; padding:18px 20px;">
+      <div class="mono" style="font-size:22px; font-weight:600; color:#c2c8cf; margin-bottom:8px;">4</div>
+      <div style="font-size:14.5px; font-weight:600; margin-bottom:4px;">ดึงไปใช้ · ปักหมุด</div>
+      <div style="font-size:12.5px; color:#5b636c; line-height:1.5;">ของด่วนปักหมุดไว้บนสุด เปิดเจอทันที</div>
+    </div>
+  </div>
+
+  <!-- ===== Theme section header ===== -->
+  <div style="margin-bottom:20px; display:flex; align-items:baseline; gap:12px;">
+    <h2 style="font-size:13px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:#7a828c; margin:0;" class="mono">ธีม / Layout ให้เลือก — 3 แบบ</h2>
+    <div style="height:1px; background:#cfd4da; flex:1;"></div>
+  </div>
+
+
+  <!-- ============================================================ -->
+  <!-- THEME A — CONTROL LIGHT (card grid)                          -->
+  <!-- ============================================================ -->
+  <div style="margin-bottom:44px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:17px; font-weight:700;">A · Control Light</span>
+      <span style="font-size:12px; background:#1f6fd6; color:#fff; padding:3px 9px; border-radius:20px; font-weight:600;">แนะนำ</span>
+      <span style="font-size:13px; color:#6b7480;">การ์ดสว่าง สะอาดตา · accent น้ำเงิน · เหมาะกับห้องคุมที่ไฟสว่าง</span>
+    </div>
+
+    <div style="border-radius:14px; overflow:hidden; box-shadow:0 8px 30px rgba(20,30,45,0.13); border:1px solid #d3d8de; background:#eef0f2;">
+      <!-- top bar -->
+      <div style="display:flex; align-items:center; gap:16px; background:#fff; border-bottom:1px solid #e2e6ea; padding:14px 20px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <div style="width:11px;height:11px;border-radius:3px;background:#1f6fd6;"></div>
+          <span style="font-weight:700; font-size:15px;">คลังความรู้ Boardman</span>
+        </div>
+        <div style="flex:1; max-width:520px; display:flex; align-items:center; gap:8px; background:#f1f3f5; border:1px solid #e2e6ea; border-radius:9px; padding:9px 14px; color:#9aa1a9;">
+          <span style="font-size:14px;">⌕</span>
+          <span class="mono" style="font-size:13px;">ค้นหา tag, ค่า, ขั้นตอน...  เช่น "FIC-1023" หรือ "trip P-301"</span>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <div style="background:#1f6fd6; color:#fff; font-size:13px; font-weight:600; padding:9px 15px; border-radius:9px;">+ เพิ่มข้อมูล</div>
+        </div>
+      </div>
+      <div style="display:flex; min-height:430px;">
+        <!-- left rail -->
+        <div style="width:218px; background:#fff; border-right:1px solid #e2e6ea; padding:16px 12px;">
+          <div class="mono" style="font-size:10.5px; color:#9aa1a9; letter-spacing:0.1em; padding:0 8px 8px;">หมวดหมู่</div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; background:#fff5e6; margin-bottom:2px;">
+            <span style="color:#d98a00;">★</span><span style="font-size:13.5px; font-weight:600;">ปักหมุด</span><span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">4</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; background:#eaf2fd; color:#1f6fd6; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#1f6fd6;"></span><span style="font-size:13.5px; font-weight:600;">Setpoint / Alarm</span><span class="mono" style="margin-left:auto; font-size:11px;">28</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#c2c8cf;"></span><span style="font-size:13.5px; color:#3a424c;">Start-up / Shutdown</span><span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">12</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#c2c8cf;"></span><span style="font-size:13.5px; color:#3a424c;">Interlock / C&E</span><span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">19</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#c2c8cf;"></span><span style="font-size:13.5px; color:#3a424c;">Troubleshooting</span><span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">23</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#c2c8cf;"></span><span style="font-size:13.5px; color:#3a424c;">Equipment / P&ID</span><span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">31</span>
+          </div>
+        </div>
+        <!-- main -->
+        <div style="flex:1; padding:20px; overflow:hidden;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <span style="color:#d98a00; font-size:14px;">★</span>
+            <span style="font-size:13px; font-weight:700; letter-spacing:0.04em;">ปักหมุด</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:22px;">
+            <!-- pinned card 1 -->
+            <div style="background:#fff; border:1px solid #e2e6ea; border-left:3px solid #1f6fd6; border-radius:10px; padding:15px;">
+              <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
+                <span class="mono" style="font-size:13px; font-weight:600; background:#eaf2fd; color:#1f6fd6; padding:2px 8px; border-radius:5px;">FIC-1023</span>
+                <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px;">XLS</span>
+              </div>
+              <div style="font-size:14px; font-weight:600; margin-bottom:8px;">Feed Flow Control — Setpoint & Alarm</div>
+              <div class="mono" style="font-size:11.5px; color:#4a525c; line-height:1.8;">SP <b>45.0 t/h</b> &nbsp;·&nbsp; <span style="color:#d23b34;">HH 52</span> / <span style="color:#d98a00;">H 48</span> / <span style="color:#d98a00;">L 38</span> / <span style="color:#d23b34;">LL 34</span></div>
+            </div>
+            <!-- pinned card 2 -->
+            <div style="background:#fff; border:1px solid #e2e6ea; border-left:3px solid #1f6fd6; border-radius:10px; padding:15px;">
+              <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
+                <span class="mono" style="font-size:13px; font-weight:600; background:#eaf2fd; color:#1f6fd6; padding:2px 8px; border-radius:5px;">K-401</span>
+                <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px;">PDF</span>
+              </div>
+              <div style="font-size:14px; font-weight:600; margin-bottom:8px;">Recycle Gas Compressor — Start-up</div>
+              <div style="font-size:12px; color:#5b636c; line-height:1.5;">1) Purge N₂ 2) Aux lube oil ON 3) Seal gas 4) Slow roll → ramp…</div>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <span style="font-size:13px; font-weight:700; letter-spacing:0.04em;">ทั้งหมด</span>
+            <span class="mono" style="font-size:11px; color:#9aa1a9;">113 รายการ</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="background:#fff; border:1px solid #e2e6ea; border-radius:9px; padding:12px 14px; display:flex; align-items:center; gap:12px;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#d23b34; flex-shrink:0;"></span>
+              <span class="mono" style="font-size:12.5px; font-weight:600; color:#1f6fd6; width:92px; flex-shrink:0;">LSHH-205</span>
+              <span style="font-size:13.5px; flex:1;">Interlock — High level trip Pump P-301</span>
+              <span style="font-size:11.5px; color:#9aa1a9;">Interlock / C&E</span>
+              <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px;">IMG</span>
+            </div>
+            <div style="background:#fff; border:1px solid #e2e6ea; border-radius:9px; padding:12px 14px; display:flex; align-items:center; gap:12px;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#d98a00; flex-shrink:0;"></span>
+              <span class="mono" style="font-size:12.5px; font-weight:600; color:#1f6fd6; width:92px; flex-shrink:0;">F-101</span>
+              <span style="font-size:13.5px; flex:1;">Furnace draft fluctuation — วิธีแก้</span>
+              <span style="font-size:11.5px; color:#9aa1a9;">Troubleshooting</span>
+              <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px;">✎</span>
+            </div>
+            <div style="background:#fff; border:1px solid #e2e6ea; border-radius:9px; padding:12px 14px; display:flex; align-items:center; gap:12px;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#1f9d57; flex-shrink:0;"></span>
+              <span class="mono" style="font-size:12.5px; font-weight:600; color:#1f6fd6; width:92px; flex-shrink:0;">P-301 A/B</span>
+              <span style="font-size:13.5px; flex:1;">BFW Pump — Equipment & P&ID 12-204</span>
+              <span style="font-size:11.5px; color:#9aa1a9;">Equipment / P&ID</span>
+              <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px;">PDF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================ -->
+  <!-- THEME B — CONSOLE DARK                                       -->
+  <!-- ============================================================ -->
+  <div style="margin-bottom:44px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:17px; font-weight:700;">B · Console Dark</span>
+      <span style="font-size:13px; color:#6b7480;">โทนเข้มแบบจอ DCS · สบายตาเวลากะดึก · ค่า readout เรืองแสง amber/green</span>
+    </div>
+
+    <div style="border-radius:14px; overflow:hidden; box-shadow:0 8px 30px rgba(10,15,25,0.28); border:1px solid #20283400; background:#0f1419;">
+      <!-- top bar -->
+      <div style="display:flex; align-items:center; gap:16px; background:#161c24; border-bottom:1px solid #243040; padding:14px 20px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <div style="width:11px;height:11px;border-radius:3px;background:#4aa3ff;"></div>
+          <span style="font-weight:700; font-size:15px; color:#e6ebf0;">คลังความรู้ Boardman</span>
+        </div>
+        <div style="flex:1; max-width:520px; display:flex; align-items:center; gap:8px; background:#0f1419; border:1px solid #243040; border-radius:9px; padding:9px 14px; color:#5d6b7d;">
+          <span style="font-size:14px;">⌕</span>
+          <span class="mono" style="font-size:13px;">ค้นหา tag, ค่า, ขั้นตอน...</span>
+        </div>
+        <div style="margin-left:auto;">
+          <div style="background:#4aa3ff; color:#06121f; font-size:13px; font-weight:700; padding:9px 15px; border-radius:9px;">+ เพิ่มข้อมูล</div>
+        </div>
+      </div>
+      <div style="display:flex; min-height:430px;">
+        <!-- left rail -->
+        <div style="width:218px; background:#131922; border-right:1px solid #243040; padding:16px 12px;">
+          <div class="mono" style="font-size:10.5px; color:#5d6b7d; letter-spacing:0.1em; padding:0 8px 8px;">หมวดหมู่</div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; background:#2a2113; margin-bottom:2px;">
+            <span style="color:#f0a93b;">★</span><span style="font-size:13.5px; font-weight:600; color:#f0a93b;">ปักหมุด</span><span class="mono" style="margin-left:auto; font-size:11px; color:#8a6a2f;">4</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; background:#13283f; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#4aa3ff;"></span><span style="font-size:13.5px; font-weight:600; color:#9fd0ff;">Setpoint / Alarm</span><span class="mono" style="margin-left:auto; font-size:11px; color:#5d8bb8;">28</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#3a4655;"></span><span style="font-size:13.5px; color:#a7b2c0;">Start-up / Shutdown</span><span class="mono" style="margin-left:auto; font-size:11px; color:#5d6b7d;">12</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#3a4655;"></span><span style="font-size:13.5px; color:#a7b2c0;">Interlock / C&E</span><span class="mono" style="margin-left:auto; font-size:11px; color:#5d6b7d;">19</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px; margin-bottom:2px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#3a4655;"></span><span style="font-size:13.5px; color:#a7b2c0;">Troubleshooting</span><span class="mono" style="margin-left:auto; font-size:11px; color:#5d6b7d;">23</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:8px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#3a4655;"></span><span style="font-size:13.5px; color:#a7b2c0;">Equipment / P&ID</span><span class="mono" style="margin-left:auto; font-size:11px; color:#5d6b7d;">31</span>
+          </div>
+        </div>
+        <!-- main -->
+        <div style="flex:1; padding:20px; background:#0f1419;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <span style="color:#f0a93b; font-size:14px;">★</span>
+            <span style="font-size:13px; font-weight:700; letter-spacing:0.04em; color:#cdd6e0;">ปักหมุด</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:22px;">
+            <div style="background:#161c24; border:1px solid #243040; border-left:3px solid #4aa3ff; border-radius:10px; padding:15px;">
+              <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
+                <span class="mono" style="font-size:13px; font-weight:600; background:#13283f; color:#9fd0ff; padding:2px 8px; border-radius:5px;">FIC-1023</span>
+                <span class="mono" style="font-size:10px; color:#5d6b7d; border:1px solid #243040; padding:2px 6px; border-radius:4px;">XLS</span>
+              </div>
+              <div style="font-size:14px; font-weight:600; margin-bottom:8px; color:#e6ebf0;">Feed Flow Control — Setpoint & Alarm</div>
+              <div class="mono" style="font-size:11.5px; color:#a7b2c0; line-height:1.8;">SP <b style="color:#3ecf8e;">45.0 t/h</b> &nbsp;·&nbsp; <span style="color:#ff5d57;">HH 52</span> / <span style="color:#f0a93b;">H 48</span> / <span style="color:#f0a93b;">L 38</span> / <span style="color:#ff5d57;">LL 34</span></div>
+            </div>
+            <div style="background:#161c24; border:1px solid #243040; border-left:3px solid #4aa3ff; border-radius:10px; padding:15px;">
+              <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
+                <span class="mono" style="font-size:13px; font-weight:600; background:#13283f; color:#9fd0ff; padding:2px 8px; border-radius:5px;">K-401</span>
+                <span class="mono" style="font-size:10px; color:#5d6b7d; border:1px solid #243040; padding:2px 6px; border-radius:4px;">PDF</span>
+              </div>
+              <div style="font-size:14px; font-weight:600; margin-bottom:8px; color:#e6ebf0;">Recycle Gas Compressor — Start-up</div>
+              <div style="font-size:12px; color:#8a95a3; line-height:1.5;">1) Purge N₂ 2) Aux lube oil ON 3) Seal gas 4) Slow roll → ramp…</div>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <span style="font-size:13px; font-weight:700; letter-spacing:0.04em; color:#cdd6e0;">ทั้งหมด</span>
+            <span class="mono" style="font-size:11px; color:#5d6b7d;">113 รายการ</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="background:#161c24; border:1px solid #243040; border-radius:9px; padding:12px 14px; display:flex; align-items:center; gap:12px;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#ff5d57; flex-shrink:0;"></span>
+              <span class="mono" style="font-size:12.5px; font-weight:600; color:#9fd0ff; width:92px; flex-shrink:0;">LSHH-205</span>
+              <span style="font-size:13.5px; flex:1; color:#dbe2ea;">Interlock — High level trip Pump P-301</span>
+              <span style="font-size:11.5px; color:#5d6b7d;">Interlock / C&E</span>
+              <span class="mono" style="font-size:10px; color:#5d6b7d; border:1px solid #243040; padding:2px 6px; border-radius:4px;">IMG</span>
+            </div>
+            <div style="background:#161c24; border:1px solid #243040; border-radius:9px; padding:12px 14px; display:flex; align-items:center; gap:12px;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#f0a93b; flex-shrink:0;"></span>
+              <span class="mono" style="font-size:12.5px; font-weight:600; color:#9fd0ff; width:92px; flex-shrink:0;">F-101</span>
+              <span style="font-size:13.5px; flex:1; color:#dbe2ea;">Furnace draft fluctuation — วิธีแก้</span>
+              <span style="font-size:11.5px; color:#5d6b7d;">Troubleshooting</span>
+              <span class="mono" style="font-size:10px; color:#5d6b7d; border:1px solid #243040; padding:2px 6px; border-radius:4px;">✎</span>
+            </div>
+            <div style="background:#161c24; border:1px solid #243040; border-radius:9px; padding:12px 14px; display:flex; align-items:center; gap:12px;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#3ecf8e; flex-shrink:0;"></span>
+              <span class="mono" style="font-size:12.5px; font-weight:600; color:#9fd0ff; width:92px; flex-shrink:0;">P-301 A/B</span>
+              <span style="font-size:13.5px; flex:1; color:#dbe2ea;">BFW Pump — Equipment & P&ID 12-204</span>
+              <span style="font-size:11.5px; color:#5d6b7d;">Equipment / P&ID</span>
+              <span class="mono" style="font-size:10px; color:#5d6b7d; border:1px solid #243040; padding:2px 6px; border-radius:4px;">PDF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============================================================ -->
+  <!-- THEME C — ENGINEERING REGISTER (dense table)                 -->
+  <!-- ============================================================ -->
+  <div style="margin-bottom:44px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span style="font-size:17px; font-weight:700;">C · Engineering Register</span>
+      <span style="font-size:13px; color:#6b7480;">เน้นความหนาแน่นข้อมูล · ตารางแบบทะเบียน · เห็นค่าหลายรายการพร้อมกัน เลื่อนน้อย</span>
+    </div>
+
+    <div style="border-radius:14px; overflow:hidden; box-shadow:0 8px 30px rgba(20,30,45,0.13); border:1px solid #d3d8de; background:#f7f8f9;">
+      <!-- top bar -->
+      <div style="display:flex; align-items:center; gap:16px; background:#21282f; padding:13px 20px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <div style="width:11px;height:11px;border-radius:2px;background:#4f9cf0;"></div>
+          <span style="font-weight:700; font-size:15px; color:#fff;">คลังความรู้ Boardman</span>
+        </div>
+        <div style="flex:1; max-width:520px; display:flex; align-items:center; gap:8px; background:#2c343c; border:1px solid #3a444d; border-radius:7px; padding:8px 13px; color:#8a95a0;">
+          <span style="font-size:14px;">⌕</span>
+          <span class="mono" style="font-size:13px;">ค้นหา / กรองทะเบียน...</span>
+        </div>
+        <div style="margin-left:auto;">
+          <div class="mono" style="background:#4f9cf0; color:#fff; font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:7px;">+ NEW</div>
+        </div>
+      </div>
+      <div style="display:flex;">
+        <!-- left rail compact -->
+        <div style="width:172px; background:#eceef0; border-right:1px solid #dde1e6; padding:12px 8px; font-size:12.5px;">
+          <div class="mono" style="font-size:10px; color:#9aa1a9; letter-spacing:0.1em; padding:0 8px 6px;">FILTER</div>
+          <div style="padding:7px 9px; border-radius:6px; background:#fff5e6; color:#a8690a; font-weight:600; margin-bottom:1px; display:flex; gap:6px;"><span>★</span>ปักหมุด <span class="mono" style="margin-left:auto; color:#c79a4a;">4</span></div>
+          <div style="padding:7px 9px; border-radius:6px; background:#fff; color:#2b4a6f; font-weight:600; margin-bottom:1px; display:flex;">Setpoint/Alarm <span class="mono" style="margin-left:auto; color:#9aa1a9;">28</span></div>
+          <div style="padding:7px 9px; border-radius:6px; color:#3a424c; margin-bottom:1px; display:flex;">Start/Shutdown <span class="mono" style="margin-left:auto; color:#9aa1a9;">12</span></div>
+          <div style="padding:7px 9px; border-radius:6px; color:#3a424c; margin-bottom:1px; display:flex;">Interlock/C&E <span class="mono" style="margin-left:auto; color:#9aa1a9;">19</span></div>
+          <div style="padding:7px 9px; border-radius:6px; color:#3a424c; margin-bottom:1px; display:flex;">Trouble <span class="mono" style="margin-left:auto; color:#9aa1a9;">23</span></div>
+          <div style="padding:7px 9px; border-radius:6px; color:#3a424c; display:flex;">Equipment <span class="mono" style="margin-left:auto; color:#9aa1a9;">31</span></div>
+        </div>
+        <!-- table -->
+        <div style="flex:1; background:#fff;">
+          <!-- header row -->
+          <div class="mono" style="display:grid; grid-template-columns:24px 110px 1fr 130px 84px 70px; gap:0; background:#f1f3f5; border-bottom:1px solid #dde1e6; font-size:10.5px; color:#7a828c; letter-spacing:0.06em; text-transform:uppercase;">
+            <div style="padding:9px 8px;"></div>
+            <div style="padding:9px 8px;">TAG</div>
+            <div style="padding:9px 8px;">รายการ</div>
+            <div style="padding:9px 8px;">ค่า / SETPOINT</div>
+            <div style="padding:9px 8px;">หมวด</div>
+            <div style="padding:9px 8px;">SRC</div>
+          </div>
+          <!-- rows -->
+          <div style="display:grid; grid-template-columns:24px 110px 1fr 130px 84px 70px; align-items:center; border-bottom:1px solid #eef0f2; background:#fffdf7;">
+            <div style="padding:11px 8px; color:#d98a00; text-align:center;">★</div>
+            <div class="mono" style="padding:11px 8px; font-weight:600; color:#2b4a6f; font-size:12.5px;">FIC-1023</div>
+            <div style="padding:11px 8px; font-size:13px;">Feed Flow Control</div>
+            <div class="mono" style="padding:11px 8px; font-size:11.5px;">SP 45.0 t/h</div>
+            <div style="padding:11px 8px; font-size:11px; color:#6b7480;">Setpoint</div>
+            <div class="mono" style="padding:11px 8px; font-size:10px; color:#9aa1a9;">XLS</div>
+          </div>
+          <div style="display:grid; grid-template-columns:24px 110px 1fr 130px 84px 70px; align-items:center; border-bottom:1px solid #eef0f2; background:#fffdf7;">
+            <div style="padding:11px 8px; color:#d98a00; text-align:center;">★</div>
+            <div class="mono" style="padding:11px 8px; font-weight:600; color:#2b4a6f; font-size:12.5px;">K-401</div>
+            <div style="padding:11px 8px; font-size:13px;">Recycle Gas Compressor — Start-up</div>
+            <div class="mono" style="padding:11px 8px; font-size:11.5px; color:#9aa1a9;">— procedure —</div>
+            <div style="padding:11px 8px; font-size:11px; color:#6b7480;">Start-up</div>
+            <div class="mono" style="padding:11px 8px; font-size:10px; color:#9aa1a9;">PDF</div>
+          </div>
+          <div style="display:grid; grid-template-columns:24px 110px 1fr 130px 84px 70px; align-items:center; border-bottom:1px solid #eef0f2;">
+            <div style="padding:11px 8px; text-align:center;"><span style="display:inline-block; width:6px;height:6px;border-radius:50%;background:#d23b34;"></span></div>
+            <div class="mono" style="padding:11px 8px; font-weight:600; color:#2b4a6f; font-size:12.5px;">LSHH-205</div>
+            <div style="padding:11px 8px; font-size:13px;">Interlock — High level trip P-301</div>
+            <div class="mono" style="padding:11px 8px; font-size:11.5px; color:#d23b34;">&gt; 80% → TRIP</div>
+            <div style="padding:11px 8px; font-size:11px; color:#6b7480;">Interlock</div>
+            <div class="mono" style="padding:11px 8px; font-size:10px; color:#9aa1a9;">IMG</div>
+          </div>
+          <div style="display:grid; grid-template-columns:24px 110px 1fr 130px 84px 70px; align-items:center; border-bottom:1px solid #eef0f2;">
+            <div style="padding:11px 8px; text-align:center;"><span style="display:inline-block; width:6px;height:6px;border-radius:50%;background:#d98a00;"></span></div>
+            <div class="mono" style="padding:11px 8px; font-weight:600; color:#2b4a6f; font-size:12.5px;">F-101</div>
+            <div style="padding:11px 8px; font-size:13px;">Furnace draft fluctuation — วิธีแก้</div>
+            <div class="mono" style="padding:11px 8px; font-size:11.5px; color:#9aa1a9;">— note —</div>
+            <div style="padding:11px 8px; font-size:11px; color:#6b7480;">Trouble</div>
+            <div class="mono" style="padding:11px 8px; font-size:10px; color:#9aa1a9;">✎</div>
+          </div>
+          <div style="display:grid; grid-template-columns:24px 110px 1fr 130px 84px 70px; align-items:center; border-bottom:1px solid #eef0f2;">
+            <div style="padding:11px 8px; text-align:center;"><span style="display:inline-block; width:6px;height:6px;border-radius:50%;background:#1f9d57;"></span></div>
+            <div class="mono" style="padding:11px 8px; font-weight:600; color:#2b4a6f; font-size:12.5px;">P-301 A/B</div>
+            <div style="padding:11px 8px; font-size:13px;">BFW Pump — Equipment & P&ID</div>
+            <div class="mono" style="padding:11px 8px; font-size:11.5px;">12-204 · 95 bar</div>
+            <div style="padding:11px 8px; font-size:11px; color:#6b7480;">Equipment</div>
+            <div class="mono" style="padding:11px 8px; font-size:10px; color:#9aa1a9;">PDF</div>
+          </div>
+          <div style="display:grid; grid-template-columns:24px 110px 1fr 130px 84px 70px; align-items:center; border-bottom:1px solid #eef0f2;">
+            <div style="padding:11px 8px; text-align:center;"><span style="display:inline-block; width:6px;height:6px;border-radius:50%;background:#1f9d57;"></span></div>
+            <div class="mono" style="padding:11px 8px; font-weight:600; color:#2b4a6f; font-size:12.5px;">TIC-2210</div>
+            <div style="padding:11px 8px; font-size:13px;">Reactor Inlet Temp Control</div>
+            <div class="mono" style="padding:11px 8px; font-size:11.5px;">SP 320 °C</div>
+            <div style="padding:11px 8px; font-size:11px; color:#6b7480;">Setpoint</div>
+            <div class="mono" style="padding:11px 8px; font-size:10px; color:#9aa1a9;">XLS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== footer note ===== -->
+  <div style="margin-top:40px; background:#fff; border:1px solid #dde1e6; border-radius:12px; padding:22px 24px;">
+    <div style="font-size:15px; font-weight:600; margin-bottom:8px;">ขั้นตอนต่อไป</div>
+    <div style="font-size:14px; line-height:1.6; color:#4a525c; max-width:760px;">
+      เลือกธีมที่ชอบ (A / B / C) หรือบอกว่าอยากผสมส่วนไหน — เช่น “เอา layout ตาราง C แต่โทนเข้มแบบ B” แล้วผมจะลงมือทำ <b>แอปจริงที่ใช้งานได้</b> ต่อ: ลากไฟล์ได้จริง, วางภาพแคปหน้าจอได้จริง, ค้นหา/ปักหมุด/แก้ไขได้ และเก็บข้อมูลในเครื่อง.
+      <br><br>
+      <span style="color:#7a828c; font-size:13px;">หมายเหตุ: ข้อมูลในหน้านี้เป็นตัวอย่างจำลอง (FIC-1023, K-401 ฯลฯ) เพื่อให้เห็นหน้าตาเท่านั้น</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
