@@ -1870,7 +1870,7 @@ class Component extends DCLogic {
   clearGeminiKey = () => this.setState({ geminiKey: '' });
 
   async callGemini(base64, mimeType = 'image/jpeg') {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.state.geminiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${this.state.geminiKey}`;
     const body = {
       contents: [{ parts: [
         { inline_data: { mime_type: mimeType, data: base64 } },
