@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- vendor libs loaded before support.js so React is already on window (offline-safe) -->
+<script src="./vendor/react.min.js"></script>
+<script src="./vendor/react-dom.min.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="./vendor/xlsx.min.js"></script>
+<script src="./vendor/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: #eef0f2; font-family: "IBM Plex Sans Thai","IBM Plex Sans",system-ui,sans-serif; color: #1b1f24; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  ::placeholder { color: #aab1b9; }
+  textarea, input { font-family: inherit; }
+  *::-webkit-scrollbar { width: 11px; height: 11px; }
+  *::-webkit-scrollbar-thumb { background: #cfd5db; border-radius: 6px; border: 3px solid #fff; }
+</style>
+</helmet>
+
+<div style="height:100vh; display:flex; flex-direction:column; overflow:hidden;">
+
+  <!-- ===== TOP BAR ===== -->
+  <div style="display:flex; align-items:center; gap:16px; background:#fff; border-bottom:1px solid #e2e6ea; padding:12px 22px; flex-shrink:0; z-index:5;">
+    <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+      <div style="width:13px;height:13px;border-radius:3px;background:#1f6fd6;"></div>
+      <span style="font-weight:700; font-size:16px; white-space:nowrap;">คลังความรู้ Boardman</span>
+    </div>
+    <div style="flex:1; max-width:560px; display:flex; align-items:center; gap:9px; background:#f1f3f5; border:1px solid #e2e6ea; border-radius:10px; padding:10px 14px;">
+      <span style="font-size:15px; color:#9aa1a9;">⌕</span>
+      <input value="{{ query }}" onInput="{{ setQuery }}" onChange="{{ setQuery }}" placeholder="ค้นหา tag, ค่า, ขั้นตอน...  เช่น FIC-1023 หรือ trip P-301" style="border:none; background:transparent; outline:none; width:100%; font-size:14px; color:#1b1f24;" class="mono" />
+      <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ false }}">
+        <span onClick="{{ clearQuery }}" style="cursor:pointer; color:#9aa1a9; font-size:16px; padding:0 2px;">×</span>
+      </sc-if>
+    </div>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+      <span class="mono" style="font-size:11.5px; color:#9aa1a9;">{{ totalCount }} รายการ</span>
+      <sc-if value="{{ geminiActive }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ openApiKeyModal }}" style="cursor:pointer; display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:#1a7a4a; background:#e6f7ee; border:1px solid #b0e0c6; padding:6px 11px; border-radius:8px; white-space:nowrap;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#1a7a4a;"></span> Gemini AI
+        </div>
+      </sc-if>
+      <sc-if value="{{ geminiActive }}" hint-placeholder-val="{{ true }}">
+        <div onClick="{{ openApiKeyModal }}" style="cursor:pointer; font-size:12px; color:#9aa1a9; border:1px solid #e2e6ea; padding:6px 11px; border-radius:8px; white-space:nowrap;">🔑 ใส่ Gemini Key</div>
+      </sc-if>
+      <div onClick="{{ openAdd }}" style="cursor:pointer; background:#1f6fd6; color:#fff; font-size:14px; font-weight:600; padding:10px 16px; border-radius:10px; display:flex; align-items:center; gap:6px; white-space:nowrap; flex-shrink:0;" style-hover="background:#1a60bd;">
+        <span style="font-size:16px; line-height:1;">+</span> เพิ่มข้อมูล
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1; display:flex; min-height:0;">
+
+    <!-- ===== SIDEBAR ===== -->
+    <div style="width:236px; background:#fff; border-right:1px solid #e2e6ea; padding:18px 12px; flex-shrink:0; overflow-y:auto;">
+      <div class="mono" style="font-size:10.5px; color:#9aa1a9; letter-spacing:0.12em; padding:0 10px 9px;">หมวดหมู่</div>
+
+      <!-- ALL -->
+      <div onClick="{{ selectAll }}" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:9px; margin-bottom:2px; background: {{ allBg }}; color: {{ allFg }};">
+        <span style="width:8px;height:8px;border-radius:2px; background:#8a95a0;"></span>
+        <span style="font-size:13.5px; font-weight:500;">ทั้งหมด</span>
+        <span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">{{ totalCount }}</span>
+      </div>
+
+      <!-- PINNED -->
+      <div onClick="{{ selectPinned }}" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:9px; margin-bottom:8px; background: {{ pinBg }}; color: {{ pinFg }};">
+        <span style="color:#d98a00;">★</span>
+        <span style="font-size:13.5px; font-weight:600; white-space:nowrap;">ปักหมุด</span>
+        <span class="mono" style="margin-left:auto; font-size:11px; color:#c79a4a;">{{ pinnedCount }}</span>
+      </div>
+
+      <div style="height:1px; background:#eef0f2; margin:0 10px 8px;"></div>
+
+      <sc-for list="{{ categories }}" as="c" hint-placeholder-count="6">
+        <div onClick="{{ c.select }}" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:9px; margin-bottom:2px; background: {{ c.bg }}; color: {{ c.fg }};">
+          <span style="width:8px;height:8px;border-radius:50%; background: {{ c.dot }};"></span>
+          <span style="font-size:13.5px; font-weight: {{ c.weight }};">{{ c.label }}</span>
+          <span class="mono" style="margin-left:auto; font-size:11px; color:#9aa1a9;">{{ c.count }}</span>
+        </div>
+      </sc-for>
+
+      <div style="margin-top:18px; padding:13px 12px; background:#f6f8fa; border:1px dashed #d3d8de; border-radius:10px;">
+        <div style="font-size:11.5px; color:#6b7480; line-height:1.55;">💡 ลากไฟล์ <b>PDF / Excel</b> หรือกด <b>Ctrl+V</b> วางภาพแคปหน้าจอ DCS มาที่หน้านี้ได้เลย</div>
+      </div>
+    </div>
+
+    <!-- ===== MAIN ===== -->
+    <div style="flex:1; overflow-y:auto; min-width:0;">
+
+      <!-- DETAIL VIEW -->
+      <sc-if value="{{ showDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:860px; margin:0 auto; padding:26px 32px;">
+          <div onClick="{{ closeDetail }}" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#5b636c; margin-bottom:18px;">‹ กลับไปรายการ</div>
+          <div style="background:#fff; border:1px solid #e2e6ea; border-radius:14px; overflow:hidden;">
+            <div style="border-top:4px solid {{ detail.statusColor }}; padding:24px 28px;">
+              <div style="display:flex; align-items:flex-start; gap:14px;">
+                <span class="mono" style="font-size:16px; font-weight:600; background:#eaf2fd; color:#1f6fd6; padding:4px 11px; border-radius:7px;">{{ detail.tag }}</span>
+                <div style="margin-left:auto; display:flex; gap:8px;">
+                  <div onClick="{{ togglePinDetail }}" style="cursor:pointer; font-size:13px; font-weight:600; padding:8px 13px; border-radius:8px; border:1px solid #e2e6ea; color: {{ detail.pinColor }};">{{ detail.pinLabel }}</div>
+                  <div onClick="{{ editDetail }}" style="cursor:pointer; font-size:13px; font-weight:600; padding:8px 13px; border-radius:8px; border:1px solid #e2e6ea; color:#3a424c;">แก้ไข</div>
+                  <div onClick="{{ deleteDetail }}" style="cursor:pointer; font-size:13px; font-weight:600; padding:8px 13px; border-radius:8px; border:1px solid #f2d4d2; color:#d23b34;">ลบ</div>
+                </div>
+              </div>
+              <h1 style="font-size:24px; font-weight:700; margin:16px 0 12px; line-height:1.25;">{{ detail.title }}</h1>
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:4px;">
+                <span style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#5b636c; background:#f1f3f5; padding:4px 10px; border-radius:6px;"><span style="width:7px;height:7px;border-radius:50%;background:{{ detail.statusColor }};"></span>{{ detail.categoryLabel }} · {{ detail.statusLabel }}</span>
+                <span class="mono" style="font-size:11px; color:#9aa1a9; border:1px solid #e2e6ea; padding:3px 8px; border-radius:5px;">{{ detail.source }}</span>
+                <span style="font-size:11.5px; color:#9aa1a9;">{{ detail.updatedText }}</span>
+              </div>
+            </div>
+            <div style="padding:0 28px 26px;">
+              <div class="mono" style="white-space:pre-wrap; font-size:14px; line-height:1.85; color:#2a323b; background:#f8fafb; border:1px solid #eef0f2; border-radius:10px; padding:18px 20px;">{{ detail.content }}</div>
+              <sc-if value="{{ detail.image }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:16px;">
+                  <div class="mono" style="font-size:11px; color:#9aa1a9; margin-bottom:8px;">ภาพแนบ</div>
+                  <img src="{{ detail.image }}" style="max-width:100%; border-radius:10px; border:1px solid #e2e6ea;" />
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- LIST VIEW -->
+      <sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:1040px; margin:0 auto; padding:24px 30px 60px;">
+
+          <!-- EMPTY STATE -->
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ openAdd }}" style="cursor:pointer; margin-top:40px; border:2px dashed #cfd5db; border-radius:16px; padding:64px 30px; text-align:center; background:#fff;">
+              <div style="font-size:40px; color:#c2c8cf; margin-bottom:14px;">↧</div>
+              <div style="font-size:17px; font-weight:600; margin-bottom:6px;">ยังไม่มีข้อมูลในหมวดนี้</div>
+              <div style="font-size:13.5px; color:#6b7480; line-height:1.6;">ลากไฟล์ PDF/Excel มาวาง · กด Ctrl+V วางภาพ · หรือกด “เพิ่มข้อมูล”</div>
+            </div>
+          </sc-if>
+
+          <!-- PINNED SECTION -->
+          <sc-if value="{{ showPinnedSection }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:13px;">
+              <span style="color:#d98a00; font-size:15px;">★</span>
+              <span style="font-size:13px; font-weight:700; letter-spacing:0.04em; white-space:nowrap;">ปักหมุด</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-bottom:30px;">
+              <sc-for list="{{ pinnedItems }}" as="it" hint-placeholder-count="2">
+                <div onClick="{{ it.open }}" style="cursor:pointer; background:#fff; border:1px solid #e2e6ea; border-left:3px solid #1f6fd6; border-radius:11px; padding:16px;" style-hover="border-color:#bcd3f2;">
+                  <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:9px;">
+                    <span class="mono" style="font-size:13px; font-weight:600; background:#eaf2fd; color:#1f6fd6; padding:2px 9px; border-radius:6px;">{{ it.tag }}</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px;">{{ it.source }}</span>
+                      <span onClick="{{ it.togglePin }}" style="cursor:pointer; color:#d98a00; font-size:15px;">★</span>
+                    </div>
+                  </div>
+                  <div style="font-size:14.5px; font-weight:600; margin-bottom:7px; line-height:1.3;">{{ it.title }}</div>
+                  <div class="mono" style="font-size:12px; color:#5b636c; line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ it.snippet }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- LIST HEADER -->
+          <sc-if value="{{ showListHeader }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; align-items:center; gap:9px; margin-bottom:13px;">
+              <span style="font-size:13px; font-weight:700; letter-spacing:0.04em;">{{ listLabel }}</span>
+              <span class="mono" style="font-size:11px; color:#9aa1a9;">{{ resultCount }}</span>
+            </div>
+          </sc-if>
+
+          <!-- ROWS -->
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <sc-for list="{{ listItems }}" as="it" hint-placeholder-count="5">
+              <div onClick="{{ it.open }}" style="cursor:pointer; background:#fff; border:1px solid #e2e6ea; border-radius:10px; padding:13px 15px; display:flex; align-items:center; gap:13px;" style-hover="border-color:#bcd3f2;">
+                <span style="width:8px;height:8px;border-radius:50%; flex-shrink:0; background: {{ it.statusColor }};"></span>
+                <span class="mono" style="font-size:12.5px; font-weight:600; color:#1f6fd6; width:100px; flex-shrink:0;">{{ it.tag }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ it.title }}</div>
+                  <div class="mono" style="font-size:11.5px; color:#5b636c; line-height:1.5; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">{{ it.snippet }}</div>
+                </div>
+                <span style="font-size:11.5px; color:#9aa1a9; flex-shrink:0;">{{ it.categoryLabel }}</span>
+                <span class="mono" style="font-size:10px; color:#9aa1a9; border:1px solid #e2e6ea; padding:2px 6px; border-radius:4px; flex-shrink:0;">{{ it.source }}</span>
+                <span onClick="{{ it.togglePin }}" style="cursor:pointer; font-size:15px; flex-shrink:0; color: {{ it.pinColor }};">{{ it.pinSymbol }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- ===== ADD / EDIT MODAL ===== -->
+  <sc-if value="{{ showAdd }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(20,28,38,0.45); display:flex; align-items:flex-start; justify-content:center; padding:40px 20px; z-index:50; overflow-y:auto;" onClick="{{ closeModal }}">
+      <div onClick="{{ stop }}" style="background:#fff; border-radius:16px; width:100%; max-width:680px; box-shadow:0 20px 60px rgba(15,23,35,0.3);">
+        <!-- modal header -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #eef0f2;">
+          <span style="font-size:17px; font-weight:700;">{{ modalTitle }}</span>
+          <span onClick="{{ closeModal }}" style="cursor:pointer; font-size:22px; color:#9aa1a9; line-height:1;">×</span>
+        </div>
+
+        <div style="padding:22px 24px;">
+          <!-- DROPZONE -->
+          <div onDrop="{{ onDropZone }}" onDragOver="{{ onDragOverZone }}" onDragLeave="{{ onDragLeaveZone }}" onClick="{{ triggerFile }}" style="cursor:pointer; border:2px dashed {{ dropBorder }}; background: {{ dropBg }}; border-radius:12px; padding:22px; text-align:center; margin-bottom:8px;">
+            <div style="font-size:13.5px; font-weight:600; color:#3a424c; margin-bottom:3px;">↧ ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</div>
+            <div class="mono" style="font-size:11.5px; color:#9aa1a9;">PDF · Excel (.xlsx/.xls) · รูปภาพ · หรือกด Ctrl+V วางภาพแคปหน้าจอ</div>
+            <input type="file" ref="{{ setFileRef }}" onChange="{{ onFileInput }}" accept=".pdf,.xlsx,.xls,.csv,.txt,image/*" multiple style="display:none;" />
+          </div>
+
+          <!-- processing -->
+          <sc-if value="{{ processing }}" hint-placeholder-val="{{ false }}">
+            <div class="mono" style="font-size:12px; color:#1f6fd6; background:#eaf2fd; border-radius:8px; padding:9px 12px; margin-bottom:8px;">{{ processing }}</div>
+          </sc-if>
+
+          <!-- image preview -->
+          <sc-if value="{{ form.image }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:12px; align-items:flex-start; background:#f8fafb; border:1px solid #eef0f2; border-radius:10px; padding:12px; margin-bottom:12px;">
+              <img src="{{ form.image }}" style="width:120px; height:80px; object-fit:cover; border-radius:7px; border:1px solid #e2e6ea;" />
+              <div style="flex:1;">
+                <div style="font-size:12.5px; color:#5b636c; margin-bottom:8px;">ภาพแนบแล้ว</div>
+                <div style="display:flex; gap:8px;">
+                  <div onClick="{{ runOCR }}" style="cursor:pointer; font-size:12px; font-weight:600; color:#1f6fd6; border:1px solid #bcd3f2; background:#eaf2fd; padding:6px 11px; border-radius:7px;">{{ ocrLabel }}</div>
+                  <div onClick="{{ removeImage }}" style="cursor:pointer; font-size:12px; color:#d23b34; border:1px solid #f2d4d2; padding:6px 11px; border-radius:7px;">เอาออก</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- form fields -->
+          <div style="display:flex; gap:12px; margin-bottom:12px;">
+            <div style="width:200px;">
+              <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:5px;">TAG</label>
+              <input value="{{ form.tag }}" onInput="{{ setTag }}" onChange="{{ setTag }}" placeholder="เช่น FIC-1023" class="mono" style="width:100%; font-size:13.5px; padding:9px 11px; border:1px solid #e2e6ea; border-radius:8px; outline:none;" />
+            </div>
+            <div style="flex:1;">
+              <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:5px;">ชื่อรายการ</label>
+              <input value="{{ form.title }}" onInput="{{ setTitle }}" onChange="{{ setTitle }}" placeholder="เช่น Feed Flow Control — Setpoint" style="width:100%; font-size:13.5px; padding:9px 11px; border:1px solid #e2e6ea; border-radius:8px; outline:none;" />
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:6px;">หมวดหมู่</label>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ catOptions }}" as="o" hint-placeholder-count="6">
+                <div onClick="{{ o.select }}" style="cursor:pointer; font-size:12.5px; font-weight:500; padding:7px 12px; border-radius:20px; border:1px solid {{ o.border }}; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:6px;">สถานะ / ความสำคัญ</label>
+            <div style="display:flex; gap:7px;">
+              <sc-for list="{{ statusOptions }}" as="o" hint-placeholder-count="3">
+                <div onClick="{{ o.select }}" style="cursor:pointer; font-size:12.5px; font-weight:500; padding:7px 14px; border-radius:8px; border:1px solid {{ o.border }}; background:{{ o.bg }}; color:{{ o.fg }}; display:flex; align-items:center; gap:7px;"><span style="width:7px;height:7px;border-radius:50%;background:{{ o.dot }};"></span>{{ o.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-bottom:6px;">
+            <label class="mono" style="font-size:11px; color:#7a828c; display:block; margin-bottom:5px;">เนื้อหา / รายละเอียด</label>
+            <textarea value="{{ form.content }}" onInput="{{ setContent }}" onChange="{{ setContent }}" placeholder="พิมพ์ค่า setpoint, ขั้นตอน, หรือรายละเอียด... (ถ้าลากไฟล์/วางภาพ ระบบจะเติมให้)" class="mono" style="width:100%; min-height:150px; resize:vertical; font-size:13px; line-height:1.7; padding:12px 13px; border:1px solid #e2e6ea; border-radius:8px; outline:none;"></textarea>
+          </div>
+        </div>
+
+        <!-- modal footer -->
+        <div style="display:flex; align-items:center; gap:10px; padding:16px 24px; border-top:1px solid #eef0f2;">
+          <div onClick="{{ closeModal }}" style="cursor:pointer; font-size:14px; font-weight:600; color:#5b636c; padding:10px 18px; border-radius:9px;">ยกเลิก</div>
+          <div onClick="{{ saveItem }}" style="cursor:pointer; margin-left:auto; background: {{ saveBg }}; color:#fff; font-size:14px; font-weight:600; padding:10px 22px; border-radius:9px;">{{ saveLabel }}</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== GEMINI API KEY MODAL ===== -->
+  <sc-if value="{{ showApiKeyModal }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(20,28,38,0.65); display:flex; align-items:center; justify-content:center; padding:20px; z-index:100;">
+      <div style="background:#fff; border-radius:16px; width:100%; max-width:480px; box-shadow:0 20px 60px rgba(15,23,35,0.35);">
+        <div style="padding:28px 28px 20px;">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+            <div style="width:40px;height:40px;border-radius:10px;background:#eaf2fd;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🔑</div>
+            <div>
+              <div style="font-size:17px; font-weight:700;">Gemini API Key</div>
+              <div style="font-size:12.5px; color:#6b7480; margin-top:2px;">สำหรับอ่าน PDF ทุกประเภท — ไทย + อังกฤษ + ตาราง</div>
+            </div>
+          </div>
+          <input value="{{ geminiKeyInput }}" onInput="{{ setGeminiKeyInput }}" onChange="{{ setGeminiKeyInput }}" placeholder="AIza..." class="mono" style="width:100%; font-size:13.5px; padding:11px 13px; border:1.5px solid #e2e6ea; border-radius:9px; outline:none; margin-bottom:10px;" />
+          <div style="font-size:11.5px; color:#9aa1a9; line-height:1.6; margin-bottom:4px;">🔒 Key เก็บเฉพาะใน memory — ไม่บันทึกลง browser หายเมื่อปิด tab</div>
+          <div style="font-size:11.5px; color:#9aa1a9;">รับ Key ได้ที่ <span class="mono">aistudio.google.com</span> → Get API Key (ฟรี)</div>
+        </div>
+        <div style="display:flex; gap:10px; padding:0 28px 24px;">
+          <div onClick="{{ skipApiKey }}" style="cursor:pointer; font-size:13.5px; font-weight:500; color:#5b636c; padding:10px 18px; border-radius:9px; border:1px solid #e2e6ea;">ข้ามก่อน</div>
+          <div onClick="{{ submitApiKey }}" style="cursor:pointer; margin-left:auto; background:#1f6fd6; color:#fff; font-size:14px; font-weight:600; padding:10px 28px; border-radius:9px;">เริ่มใช้งาน</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- GLOBAL DRAG OVERLAY -->
+  <sc-if value="{{ globalDragging }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(31,111,214,0.10); border:3px dashed #1f6fd6; z-index:60; display:flex; align-items:center; justify-content:center; pointer-events:none;">
+      <div style="background:#fff; padding:22px 34px; border-radius:14px; box-shadow:0 12px 40px rgba(15,23,35,0.25); font-size:17px; font-weight:600; color:#1f6fd6;">↧ วางไฟล์เพื่อเพิ่มเข้าคลัง</div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  // ---- master data ----
+  CATS = [
+    { key: 'setpoint',  label: 'Setpoint / Alarm' },
+    { key: 'startup',   label: 'Start-up / Shutdown' },
+    { key: 'interlock', label: 'Interlock / C&E' },
+    { key: 'trouble',   label: 'Troubleshooting' },
+    { key: 'equipment', label: 'Equipment / P&ID' },
+    { key: 'note',      label: 'บันทึก / อื่นๆ' },
+  ];
+  STATUS = [
+    { key: 'normal', label: 'ปกติ',      color: '#1f9d57' },
+    { key: 'warn',   label: 'เฝ้าระวัง', color: '#d98a00' },
+    { key: 'alarm',  label: 'วิกฤต',     color: '#d23b34' },
+  ];
+  STORE_KEY = 'bkb_items_v2';
+
+  state = {
+    items: this.loadItems(),
+    query: '',
+    activeCat: 'all',          // 'all' | 'pinned' | category key
+    showAdd: false,
+    selectedId: null,
+    editingId: null,
+    form: this.blankForm(),
+    processing: '',
+    ocrRunning: false,
+    dropHot: false,
+    globalDragging: false,
+    geminiKey: '',
+    geminiKeyInput: '',
+    showApiKeyModal: true,
+  };
+
+  blankForm() {
+    return { tag: '', title: '', content: '', category: 'setpoint', categoryTouched: false, status: 'normal', image: null, source: 'MANUAL' };
+  }
+
+  loadItems() {
+    try {
+      const raw = localStorage.getItem(this.STORE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return this.seed();
+  }
+
+  seed() {
+    const now = Date.now();
+    const d = (n) => now - n * 86400000;
+    return [
+      { id: 's1', tag: 'FIC-1023', title: 'Feed Flow Control — Setpoint & Alarm', category: 'setpoint', status: 'normal', source: 'XLS', pinned: true, image: null, updated: d(2),
+        content: 'SP 45.0 t/h\nAL-HH 52 / AL-H 48 / AL-L 38 / AL-LL 34 t/h\nPV ปกติ 44–46 t/h\nหมายเหตุ: ถ้า PV ต่ำกว่า 40 ให้เช็ค feed pump P-110 และ control valve FV-1023' },
+      { id: 's2', tag: 'K-401', title: 'Recycle Gas Compressor — Start-up Sequence', category: 'startup', status: 'normal', source: 'PDF', pinned: true, image: null, updated: d(6),
+        content: '1) Purge ด้วย N2 จน O2 < 0.5%\n2) Aux lube oil pump ON, ตรวจ pressure > 1.5 bar\n3) Seal gas ON\n4) Slow roll\n5) Ramp up ถึง Minimum Continuous Speed\n6) Load ตาม load curve' },
+      { id: 's3', tag: 'LSHH-205', title: 'Interlock — High Level Trip Pump P-301', category: 'interlock', status: 'alarm', source: 'IMG', pinned: false, image: null, updated: d(11),
+        content: 'LSHH-205 > 80% → TRIP P-301 + ปิด XV-210\nอ้างอิง Cause & Effect C-12\nReset ที่ local panel หลัง level กลับลงต่ำกว่า 70%' },
+      { id: 's4', tag: 'F-101', title: 'Furnace Draft Fluctuation — วิธีแก้', category: 'trouble', status: 'warn', source: 'MANUAL', pinned: false, image: null, updated: d(4),
+        content: 'อาการ: draft แกว่ง / pressure ไม่นิ่ง\nเช็ค: 1) damper ID fan  2) ID fan vibration  3) stack  4) burner air register\nเคยเจอ: damper actuator ค้าง แก้โดย manual override ชั่วคราว แล้วแจ้ง maintenance' },
+      { id: 's5', tag: 'P-301 A/B', title: 'BFW Pump — Equipment & P&ID', category: 'equipment', status: 'normal', source: 'PDF', pinned: false, image: null, updated: d(20),
+        content: 'P&ID 12-204\nRated 120 m3/h @ 95 bar\nP-301A running / P-301B auto-standby\nAuto-start เมื่อ discharge pressure < 88 bar' },
+      { id: 's6', tag: 'TIC-2210', title: 'Reactor Inlet Temp Control', category: 'setpoint', status: 'normal', source: 'XLS', pinned: false, image: null, updated: d(9),
+        content: 'SP 320 °C\nAL-H 335 / AL-L 305 °C\nควบคุมผ่าน fired heater F-201 fuel gas valve TV-2210' },
+    ];
+  }
+
+  persist(items) {
+    try { localStorage.setItem(this.STORE_KEY, JSON.stringify(items)); } catch (e) {}
+  }
+
+  componentDidMount() {
+    this.persist(this.state.items);
+    this._paste = (e) => this.onPaste(e);
+    this._dragover = (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) { e.preventDefault(); if (!this.state.globalDragging) this.setState({ globalDragging: true }); } };
+    this._dragleave = (e) => { if (e.relatedTarget == null || e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) this.setState({ globalDragging: false }); };
+    this._dragend = () => { if (this.state.globalDragging) this.setState({ globalDragging: false }); };
+    this._drop = (e) => { e.preventDefault(); this.setState({ globalDragging: false }); const f = e.dataTransfer && e.dataTransfer.files; if (f && f.length) { if (!this.state.showAdd) this.openAdd(); this.handleFiles(f); } };
+    document.addEventListener('paste', this._paste);
+    window.addEventListener('dragover', this._dragover);
+    window.addEventListener('dragleave', this._dragleave);
+    window.addEventListener('dragend', this._dragend);
+    window.addEventListener('drop', this._drop);
+    // workerSrc set lazily in parsePDF() to avoid race with helmet script loading
+  }
+  componentWillUnmount() {
+    document.removeEventListener('paste', this._paste);
+    window.removeEventListener('dragover', this._dragover);
+    window.removeEventListener('dragleave', this._dragleave);
+    window.removeEventListener('dragend', this._dragend);
+    window.removeEventListener('drop', this._drop);
+  }
+
+  // ---- Gemini API Key ----
+  setGeminiKeyInput = (e) => this.setState({ geminiKeyInput: e.target.value });
+  submitApiKey = () => {
+    const key = this.state.geminiKeyInput.trim();
+    if (key) this.setState({ geminiKey: key, showApiKeyModal: false, geminiKeyInput: '' });
+  };
+  skipApiKey = () => this.setState({ showApiKeyModal: false });
+  openApiKeyModal = () => this.setState({ showApiKeyModal: true, geminiKeyInput: '' });
+
+  async callGemini(base64, mimeType = 'image/jpeg') {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.state.geminiKey}`;
+    const body = {
+      contents: [{ parts: [
+        { inline_data: { mime_type: mimeType, data: base64 } },
+        { text: 'Extract all text from this engineering document image. Include all instrument tags (e.g. LI-2101, FIC-1023), numbers, units, alarm setpoints (HH/H/L/LL), table content, and any Thai text. Return only the raw extracted text, preserving line breaks and structure. No commentary.' }
+      ]}],
+      generationConfig: { temperature: 0.1 }
+    };
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!resp.ok) { const e = await resp.text(); throw new Error(`Gemini ${resp.status}: ${e.slice(0, 200)}`); }
+    const data = await resp.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+
+  async parsePDFWithGemini(pdf) {
+    const max = Math.min(pdf.numPages, 30);
+    let allText = '';
+    for (let i = 1; i <= max; i++) {
+      this.setState({ processing: `กำลังอ่านหน้าที่ ${i}/${max} ด้วย Gemini AI…` });
+      try {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        const pageText = await this.callGemini(base64);
+        if (pageText.trim()) allText += (allText ? '\n\n' : '') + `[หน้า ${i}]\n` + pageText.trim();
+      } catch (err) {
+        console.warn(`Gemini page ${i} error:`, err);
+      }
+      if (i < max) await new Promise(r => setTimeout(r, 300));
+    }
+    return allText;
+  }
+
+  contextSnippet(content, query) {
+    if (!query || !content) return this.snippet(content);
+    const lower = content.toLowerCase();
+    const qLower = query.toLowerCase().trim();
+    if (!qLower) return this.snippet(content);
+    const idx = lower.indexOf(qLower);
+    if (idx === -1) return this.snippet(content);
+    const pad = 90;
+    const start = Math.max(0, idx - pad);
+    const end = Math.min(content.length, idx + qLower.length + pad);
+    return (start > 0 ? '…' : '') + content.slice(start, end) + (end < content.length ? '…' : '');
+  }
+
+  // ---- helpers ----
+  catLabel(key) { const c = this.CATS.find(x => x.key === key); return c ? c.label : 'อื่นๆ'; }
+  statusObj(key) { return this.STATUS.find(x => x.key === key) || this.STATUS[0]; }
+  snippet(s) { return (s || '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+  timeAgo(t) {
+    if (!t) return '';
+    const diff = Date.now() - t, day = 86400000;
+    if (diff < 3600000) return 'เมื่อสักครู่';
+    if (diff < day) return 'วันนี้';
+    if (diff < 2 * day) return 'เมื่อวาน';
+    if (diff < 7 * day) return Math.floor(diff / day) + ' วันก่อน';
+    if (diff < 30 * day) return Math.floor(diff / (7 * day)) + ' สัปดาห์ก่อน';
+    return new Date(t).toLocaleDateString('th-TH');
+  }
+  extractTag(text) {
+    const m = (text || '').match(/\b[A-Z]{1,5}-?\d{2,5}(?:\s?[A-Z](?:\/[A-Z])?)?\b/);
+    return m ? m[0].trim() : '';
+  }
+  suggestCategory(text) {
+    const t = (text || '').toLowerCase();
+    if (/interlock|cause.{0,4}effect|c&e|\btrip\b|permissive|esd|sis/.test(t)) return 'interlock';
+    if (/start.?up|shut.?down|sequence|purge|ramp|procedure|ขั้นตอน/.test(t)) return 'startup';
+    if (/alarm|set.?point|\bsp\b|\bhh\b|\bll\b|operating limit|setpoint/.test(t)) return 'setpoint';
+    if (/trouble|fault|abnormal|problem|วิธีแก้|อาการ|fix|แก้ไข/.test(t)) return 'trouble';
+    if (/p&id|equipment|pump|compressor|valve|exchanger|rated|spec|อุปกรณ์/.test(t)) return 'equipment';
+    return 'note';
+  }
+
+  // ---- navigation ----
+  selectAll = () => this.setState({ activeCat: 'all', selectedId: null });
+  selectPinned = () => this.setState({ activeCat: 'pinned', selectedId: null });
+  setQuery = (e) => this.setState({ query: e.target.value });
+  clearQuery = () => this.setState({ query: '' });
+  openDetail = (id) => this.setState({ selectedId: id });
+  closeDetail = () => this.setState({ selectedId: null });
+  stop = (e) => e.stopPropagation();
+
+  togglePin = (id, e) => {
+    if (e) e.stopPropagation();
+    const items = this.state.items.map(it => it.id === id ? { ...it, pinned: !it.pinned } : it);
+    this.persist(items);
+    this.setState({ items });
+  };
+
+  // ---- add / edit ----
+  openAdd = () => this.setState({ showAdd: true, editingId: null, form: this.blankForm(), processing: '' });
+  closeModal = () => this.setState({ showAdd: false, editingId: null, processing: '', ocrRunning: false });
+  setTag = (e) => this.setState({ form: { ...this.state.form, tag: e.target.value } });
+  setTitle = (e) => this.setState({ form: { ...this.state.form, title: e.target.value } });
+  setContent = (e) => this.setState({ form: { ...this.state.form, content: e.target.value } });
+  setFileRef = (el) => { this._fileEl = el; };
+  triggerFile = () => { if (this._fileEl) this._fileEl.click(); };
+  onFileInput = (e) => { const f = e.target.files; if (f && f.length) this.handleFiles(f); e.target.value = ''; };
+  onDragOverZone = (e) => { e.preventDefault(); e.stopPropagation(); if (!this.state.dropHot) this.setState({ dropHot: true }); };
+  onDragLeaveZone = (e) => { e.preventDefault(); this.setState({ dropHot: false }); };
+  onDropZone = (e) => { e.preventDefault(); e.stopPropagation(); this.setState({ dropHot: false, globalDragging: false }); const f = e.dataTransfer.files; if (f && f.length) this.handleFiles(f); };
+  removeImage = () => this.setState({ form: { ...this.state.form, image: null } });
+
+  onPaste = (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    const active = document.activeElement;
+    const inField = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+    for (const it of items) {
+      if (it.type && it.type.indexOf('image') === 0) {
+        const file = it.getAsFile();
+        if (file && !inField) { if (!this.state.showAdd) this.openAdd(); setTimeout(() => this.handleFiles([file]), 0); e.preventDefault(); return; }
+      }
+    }
+  };
+
+  async handleFiles(fileList) {
+    const files = Array.from(fileList);
+    for (const file of files) {
+      const name = (file.name || '').toLowerCase();
+      try {
+        if (file.type.indexOf('image') === 0) {
+          const url = await this.readDataURL(file);
+          this.setState({ form: { ...this.state.form, image: url, source: 'IMG' }, processing: 'แนบภาพแล้ว — กด “อ่านข้อความจากภาพ” เพื่อดึงข้อความ (ถ้าต้องการ)' });
+        } else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) {
+          this.setState({ processing: 'กำลังอ่าน Excel…' });
+          const text = await this.parseExcel(file);
+          this.applyParsed(text, 'XLS', file.name);
+        } else if (name.endsWith('.pdf')) {
+          this.setState({ processing: 'กำลังอ่าน PDF…' });
+          const text = await this.parsePDF(file);
+          this.applyParsed(text, 'PDF', file.name);
+        } else if (/\.(txt|log|md|csv)$/i.test(name)) {
+          const text = await this.readText(file);
+          this.applyParsed(text, 'TXT', file.name);
+        } else {
+          const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : 'ไม่ทราบชนิด';
+          this.setState({ processing: '⚠️ ไม่รองรับไฟล์ชนิด .' + ext + ' — รองรับเฉพาะ PDF, Excel (.xlsx/.xls/.csv), รูปภาพ (jpg/png/gif) และ .txt' });
+        }
+      } catch (err) {
+        this.setState({ processing: 'อ่านไฟล์ไม่สำเร็จ: ' + (err && err.message ? err.message : file.name) });
+      }
+    }
+  }
+
+  applyParsed(text, source, fname) {
+    const f = this.state.form;
+    const tag = f.tag || this.extractTag(text);
+    const cat = f.categoryTouched ? f.category : this.suggestCategory(text);
+    const title = f.title || (fname ? fname.replace(/\.[^.]+$/, '') : (tag || 'รายการใหม่'));
+    const content = f.content ? (f.content + '\n\n' + text) : text;
+    const msg = text.trim()
+      ? 'ดึงข้อความสำเร็จ · ระบบเสนอ tag “' + (tag || '—') + '” และหมวด “' + this.catLabel(cat) + '” (แก้ได้)'
+      : '';  // empty: message already set by parsePDF image-fallback
+    this.setState({
+      form: { ...f, tag, title, content: content.slice(0, 20000), category: cat, source },
+      ...(msg ? { processing: msg } : {}),
+    });
+  }
+
+  readDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+  readText(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(file); }); }
+  readArrayBuffer(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); }); }
+
+  async parseExcel(file) {
+    if (!window.XLSX) throw new Error('Excel reader ยังโหลดไม่เสร็จ');
+    const buf = await this.readArrayBuffer(file);
+    const wb = window.XLSX.read(buf, { type: 'array' });
+    let out = '';
+    wb.SheetNames.forEach(n => { out += '[' + n + ']\n' + window.XLSX.utils.sheet_to_csv(wb.Sheets[n]) + '\n'; });
+    return out.trim();
+  }
+  async parsePDF(file) {
+    if (!window.pdfjsLib) throw new Error('PDF reader ยังโหลดไม่เสร็จ');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const buf = await this.readArrayBuffer(file);
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+
+    // Gemini path: render all pages as images and extract via Gemini AI
+    if (this.state.geminiKey) {
+      const text = await this.parsePDFWithGemini(pdf);
+      if (!text) this.setState({ processing: '⚠️ Gemini ไม่สามารถอ่านเอกสารนี้ได้ — ลองพิมพ์เนื้อหาเองหรือใส่ API Key ใหม่' });
+      return text;
+    }
+
+    // Fallback: pdf.js text extraction (ใช้เมื่อไม่มี Gemini key)
+    let out = '';
+    const max = Math.min(pdf.numPages, 30);
+    for (let i = 1; i <= max; i++) {
+      const page = await pdf.getPage(i);
+      const c = await page.getTextContent();
+      out += c.items.map(x => x.str).join(' ') + '\n';
+    }
+    const text = out.trim();
+    if (!text && pdf.numPages > 0) {
+      try {
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        const imgUrl = canvas.toDataURL('image/png');
+        this.setState({
+          form: { ...this.state.form, image: imgUrl, source: 'IMG' },
+          processing: '📄 PDF ไม่มีข้อความ — แนะนำให้ใส่ Gemini API Key เพื่ออ่านอัตโนมัติ หรือกด "อ่านข้อความจากภาพ (OCR)"',
+        });
+      } catch (e) {
+        this.setState({ processing: '⚠️ PDF ไม่มีข้อความ — แนะนำให้ใส่ Gemini API Key หรือพิมพ์เนื้อหาเอง' });
+      }
+    }
+    return text;
+  }
+
+  loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+  runOCR = async () => {
+    if (this.state.ocrRunning || !this.state.form.image) return;
+
+    // Gemini OCR path
+    if (this.state.geminiKey) {
+      this.setState({ ocrRunning: true, processing: 'กำลังอ่านข้อความด้วย Gemini AI…' });
+      try {
+        const dataUrl = this.state.form.image;
+        const base64 = dataUrl.split(',')[1];
+        const mimeMatch = dataUrl.match(/data:([^;]+);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+        const text = (await this.callGemini(base64, mime)).trim();
+        const f = this.state.form;
+        const tag = f.tag || this.extractTag(text);
+        const cat = f.categoryTouched ? f.category : this.suggestCategory(text);
+        this.setState({
+          form: { ...f, tag, content: f.content ? (f.content + '\n\n' + text) : text, category: cat },
+          ocrRunning: false,
+          processing: text ? 'อ่านข้อความด้วย Gemini สำเร็จ' : 'ไม่พบข้อความในภาพ',
+        });
+      } catch (err) {
+        this.setState({ ocrRunning: false, processing: 'Gemini OCR ไม่สำเร็จ: ' + (err && err.message ? err.message : 'error') });
+      }
+      return;
+    }
+
+    // Tesseract fallback
+    this.setState({ ocrRunning: true, processing: 'กำลังโหลดตัวอ่านข้อความ (OCR)…' });
+    try {
+      if (!window.Tesseract) await this.loadScript('./vendor/tesseract.min.js');
+      this.setState({ processing: 'กำลังอ่านข้อความจากภาพ… (อาจใช้เวลาสักครู่)' });
+      const { data } = await window.Tesseract.recognize(this.state.form.image, 'eng+tha');
+      const text = (data && data.text ? data.text : '').trim();
+      const f = this.state.form;
+      const tag = f.tag || this.extractTag(text);
+      const cat = f.categoryTouched ? f.category : this.suggestCategory(text);
+      this.setState({
+        form: { ...f, tag, content: f.content ? (f.content + '\n\n' + text) : text, category: cat },
+        ocrRunning: false,
+        processing: text ? 'อ่านข้อความจากภาพสำเร็จ' : 'ไม่พบข้อความในภาพ',
+      });
+    } catch (err) {
+      this.setState({ ocrRunning: false, processing: 'OCR ไม่สำเร็จ: ' + (err && err.message ? err.message : 'error') });
+    }
+  };
+
+  saveItem = () => {
+    const f = this.state.form;
+    if (!f.title.trim() && !f.tag.trim() && !f.content.trim() && !f.image) return;
+    let items;
+    if (this.state.editingId) {
+      items = this.state.items.map(it => it.id === this.state.editingId ? { ...it, ...f, title: f.title.trim() || it.title, updated: Date.now() } : it);
+    } else {
+      const item = {
+        id: 'i' + Date.now() + Math.random().toString(36).slice(2, 6),
+        tag: f.tag.trim(), title: f.title.trim() || f.tag.trim() || 'รายการใหม่',
+        content: f.content, category: f.category, status: f.status,
+        source: f.source || 'MANUAL', image: f.image, pinned: false, updated: Date.now(),
+      };
+      items = [item, ...this.state.items];
+    }
+    this.persist(items);
+    this.setState({ items, showAdd: false, editingId: null, form: this.blankForm(), processing: '' });
+  };
+
+  editDetail = () => {
+    const it = this.state.items.find(x => x.id === this.state.selectedId);
+    if (!it) return;
+    this.setState({ showAdd: true, editingId: it.id, form: { tag: it.tag, title: it.title, content: it.content, category: it.category, categoryTouched: true, status: it.status, image: it.image || null, source: it.source }, processing: '' });
+  };
+  deleteDetail = () => {
+    const id = this.state.selectedId;
+    const items = this.state.items.filter(x => x.id !== id);
+    this.persist(items);
+    this.setState({ items, selectedId: null });
+  };
+  togglePinDetail = () => { if (this.state.selectedId) this.togglePin(this.state.selectedId); };
+
+  // ---- derived view ----
+  filtered() {
+    const q = this.state.query.trim().toLowerCase();
+    let list = this.state.items;
+    if (this.state.activeCat === 'pinned') list = list.filter(it => it.pinned);
+    else if (this.state.activeCat !== 'all') list = list.filter(it => it.category === this.state.activeCat);
+    if (q) list = list.filter(it => (it.tag + ' ' + it.title + ' ' + it.content + ' ' + this.catLabel(it.category)).toLowerCase().includes(q));
+    return list.slice().sort((a, b) => (b.pinned - a.pinned) || (b.updated - a.updated));
+  }
+
+  viewItem(it, query) {
+    const st = this.statusObj(it.status);
+    const snippet = query ? this.contextSnippet(it.content, query) : this.snippet(it.content);
+    return {
+      id: it.id, tag: it.tag || '—', title: it.title, snippet,
+      categoryLabel: this.catLabel(it.category), source: it.source || 'MANUAL',
+      statusColor: st.color, pinned: it.pinned,
+      pinSymbol: it.pinned ? '★' : '☆', pinColor: it.pinned ? '#d98a00' : '#c2c8cf',
+      open: () => this.openDetail(it.id),
+      togglePin: (e) => this.togglePin(it.id, e),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const q = s.query.trim();
+    const counts = {};
+    this.CATS.forEach(c => counts[c.key] = 0);
+    let pinnedCount = 0;
+    s.items.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; if (it.pinned) pinnedCount++; });
+
+    const accentBg = '#eaf2fd', accentFg = '#1f6fd6';
+    const categories = this.CATS.map(c => {
+      const active = s.activeCat === c.key;
+      return {
+        label: c.label, count: counts[c.key] || 0,
+        bg: active ? accentBg : 'transparent', fg: active ? accentFg : '#3a424c',
+        weight: active ? '600' : '500', dot: active ? '#1f6fd6' : '#c2c8cf',
+        select: () => this.setState({ activeCat: c.key, selectedId: null }),
+      };
+    });
+
+    const list = this.filtered();
+    const detItem = s.selectedId ? s.items.find(x => x.id === s.selectedId) : null;
+    const showDetail = !!detItem;
+
+    // detail view
+    let detail = null;
+    if (detItem) {
+      const st = this.statusObj(detItem.status);
+      detail = {
+        tag: detItem.tag || '—', title: detItem.title, content: detItem.content || '(ไม่มีรายละเอียด)',
+        categoryLabel: this.catLabel(detItem.category), statusLabel: st.label, statusColor: st.color,
+        source: detItem.source || 'MANUAL', image: detItem.image || null,
+        updatedText: 'อัปเดต ' + this.timeAgo(detItem.updated),
+        pinLabel: detItem.pinned ? '★ ปักหมุดแล้ว' : '☆ ปักหมุด',
+        pinColor: detItem.pinned ? '#d98a00' : '#3a424c',
+      };
+    }
+
+    const showPinnedSection = !showDetail && s.activeCat === 'all' && !q && list.some(it => it.pinned);
+    const pinnedItems = showPinnedSection ? list.filter(it => it.pinned).map(it => this.viewItem(it, q)) : [];
+    const listSource = showPinnedSection ? list.filter(it => !it.pinned) : list;
+    const listItems = listSource.map(it => this.viewItem(it, q));
+
+    let listLabel = 'ทั้งหมด';
+    if (q) listLabel = 'ผลการค้นหา';
+    else if (s.activeCat === 'pinned') listLabel = 'ปักหมุด';
+    else if (s.activeCat !== 'all') listLabel = this.catLabel(s.activeCat);
+    else if (showPinnedSection) listLabel = 'รายการอื่น';
+
+    // form option chips
+    const f = s.form;
+    const catOptions = this.CATS.map(c => {
+      const active = f.category === c.key;
+      return { label: c.label, bg: active ? accentBg : '#fff', fg: active ? accentFg : '#5b636c', border: active ? '#bcd3f2' : '#e2e6ea', select: () => this.setState({ form: { ...this.state.form, category: c.key, categoryTouched: true } }) };
+    });
+    const statusOptions = this.STATUS.map(o => {
+      const active = f.status === o.key;
+      return { label: o.label, dot: o.color, bg: active ? '#f1f3f5' : '#fff', fg: active ? '#1b1f24' : '#5b636c', border: active ? '#cfd5db' : '#e2e6ea', select: () => this.setState({ form: { ...this.state.form, status: o.key } }) };
+    });
+
+    const canSave = !!(f.title.trim() || f.tag.trim() || f.content.trim() || f.image);
+
+    return {
+      query: s.query, hasQuery: !!q, setQuery: this.setQuery, clearQuery: this.clearQuery,
+      totalCount: s.items.length, pinnedCount,
+      allBg: (s.activeCat === 'all') ? accentBg : 'transparent', allFg: (s.activeCat === 'all') ? accentFg : '#3a424c',
+      pinBg: (s.activeCat === 'pinned') ? '#fff5e6' : 'transparent', pinFg: (s.activeCat === 'pinned') ? '#a8690a' : '#3a424c',
+      categories,
+      openAdd: this.openAdd,
+
+      showDetail, detail,
+      closeDetail: this.closeDetail, editDetail: this.editDetail, deleteDetail: this.deleteDetail, togglePinDetail: this.togglePinDetail,
+
+      showList: !showDetail,
+      isEmpty: !showDetail && list.length === 0,
+      showPinnedSection, pinnedItems,
+      showListHeader: !showDetail && list.length > 0,
+      listItems, listLabel, resultCount: list.length + ' รายการ',
+
+      // modal
+      showAdd: s.showAdd,
+      modalTitle: s.editingId ? 'แก้ไขข้อมูล' : 'เพิ่มข้อมูลใหม่',
+      form: f, setTag: this.setTag, setTitle: this.setTitle, setContent: this.setContent,
+      catOptions, statusOptions,
+      triggerFile: this.triggerFile, setFileRef: this.setFileRef, onFileInput: this.onFileInput,
+      onDropZone: this.onDropZone, onDragOverZone: this.onDragOverZone, onDragLeaveZone: this.onDragLeaveZone,
+      dropBorder: s.dropHot ? '#1f6fd6' : '#cfd5db', dropBg: s.dropHot ? '#eaf2fd' : '#f8fafb',
+      processing: s.processing,
+      removeImage: this.removeImage, runOCR: this.runOCR,
+      ocrLabel: s.ocrRunning ? 'กำลังอ่าน…' : (s.geminiKey ? 'อ่านด้วย Gemini AI' : 'อ่านข้อความจากภาพ (OCR)'),
+      saveItem: this.saveItem, closeModal: this.closeModal, stop: this.stop,
+      saveLabel: s.editingId ? 'บันทึกการแก้ไข' : 'บันทึกเข้าคลัง',
+      saveBg: canSave ? '#1f6fd6' : '#aab8c6',
+
+      globalDragging: s.globalDragging,
+
+      showApiKeyModal: s.showApiKeyModal,
+      geminiKeyInput: s.geminiKeyInput,
+      geminiActive: !!s.geminiKey,
+      setGeminiKeyInput: this.setGeminiKeyInput,
+      submitApiKey: this.submitApiKey,
+      skipApiKey: this.skipApiKey,
+      openApiKeyModal: this.openApiKeyModal,
+    };
+  }
+}
+</script>
+</body>
+</html>
