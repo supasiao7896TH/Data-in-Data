@@ -1887,22 +1887,31 @@ class Component extends DCLogic {
   async parsePDFWithGemini(pdf) {
     const max = Math.min(pdf.numPages, 30);
     let allText = '';
+    let lastError = '';
     for (let i = 1; i <= max; i++) {
       this.setState({ processing: `กำลังอ่านหน้าที่ ${i}/${max} ด้วย Gemini AI…` });
       try {
         const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
+        // Scale 1.5 then cap at 2000px max-dimension to keep payload manageable
+        const vp0 = page.getViewport({ scale: 1.5 });
+        const ratio = Math.min(1, 2000 / Math.max(vp0.width, vp0.height));
+        const viewport = page.getViewport({ scale: 1.5 * ratio });
         const canvas = document.createElement('canvas');
-        canvas.width = viewport.width; canvas.height = viewport.height;
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        const base64 = canvas.toDataURL('image/jpeg', 0.82).split(',')[1];
         const pageText = await this.callGemini(base64);
         if (pageText.trim()) allText += (allText ? '\n\n' : '') + `[หน้า ${i}]\n` + pageText.trim();
       } catch (err) {
+        lastError = err && err.message ? err.message : String(err);
         console.warn(`Gemini page ${i} error:`, err);
+        this.setState({ processing: `⚠️ หน้า ${i} error: ${lastError.slice(0, 120)}` });
+        await new Promise(r => setTimeout(r, 600));
       }
-      if (i < max) await new Promise(r => setTimeout(r, 300));
+      if (i < max && !lastError) await new Promise(r => setTimeout(r, 350));
     }
+    if (!allText && lastError) this.setState({ processing: `⚠️ Gemini: ${lastError.slice(0, 180)}` });
     return allText;
   }
 
@@ -2056,7 +2065,10 @@ class Component extends DCLogic {
     // Gemini path: render all pages as images and extract via Gemini AI
     if (this.state.geminiKey) {
       const text = await this.parsePDFWithGemini(pdf);
-      if (!text) this.setState({ processing: '⚠️ Gemini ไม่สามารถอ่านเอกสารนี้ได้ — ลองพิมพ์เนื้อหาเองหรือใส่ API Key ใหม่' });
+      // parsePDFWithGemini already sets a detailed error message; only override if state is still a plain "reading" message
+      if (!text && !this.state.processing.startsWith('⚠️')) {
+        this.setState({ processing: '⚠️ Gemini ไม่พบข้อความ — ลองพิมพ์เนื้อหาเองหรือเปลี่ยน API Key' });
+      }
       return text;
     }
 
